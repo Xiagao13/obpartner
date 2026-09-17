@@ -1,12 +1,14 @@
 package com.obpartner.app.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.*
 import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
@@ -27,7 +29,6 @@ import com.obpartner.app.data.StorageManager
 import com.obpartner.app.model.TaskItem
 import com.obpartner.app.parser.MarkdownWriter
 import java.io.File
-import java.util.Date
 
 /**
  * 桌面组件 2：当日任务组件
@@ -37,7 +38,7 @@ class TodayTasksWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (_, tasks, habits) = storageManager.scanVault()
+        val (_, tasks, _) = storageManager.scanVault()
 
         val overdueTasks = tasks.filter { it.isOverdue && !it.isCompleted }
         val doingTasks = tasks.filter { !it.isOverdue && !it.isCompleted }
@@ -59,6 +60,10 @@ class TodayTasksWidget : GlanceAppWidget() {
         doingTasks: List<TaskItem>,
         storageManager: StorageManager
     ) {
+        val mainActivityIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
@@ -87,7 +92,7 @@ class TodayTasksWidget : GlanceAppWidget() {
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     ),
-                    modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>())
+                    modifier = GlanceModifier.clickable(actionStartActivity(mainActivityIntent))
                 )
             }
 

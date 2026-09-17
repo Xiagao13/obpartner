@@ -1,8 +1,8 @@
 package com.obpartner.app.calendar
 
-import com.nlf.calendar.HolidayUtil
 import com.nlf.calendar.Lunar
 import com.nlf.calendar.Solar
+import com.nlf.calendar.util.HolidayUtil
 import com.obpartner.app.model.LunarDetails
 import java.util.Calendar
 import java.util.Date

@@ -1,6 +1,7 @@
 package com.obpartner.app.widget
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -59,6 +60,9 @@ class CalendarWidget : GlanceAppWidget() {
     ) {
         val todayStr = SimpleDateFormat("M月d日 EEEE", Locale.CHINESE).format(today)
         val weekDates = CalendarUtils.getWeekDates(today, storageManager.getSettings().weekStartsOn)
+        val mainActivityIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
 
         // 筛选本周与今日日程
         val todayEvents = events.filter { CalendarUtils.isSameDay(Date(it.start), today) }
@@ -100,7 +104,7 @@ class CalendarWidget : GlanceAppWidget() {
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
                     ),
-                    modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>())
+                    modifier = GlanceModifier.clickable(actionStartActivity(mainActivityIntent))
                 )
             }
 

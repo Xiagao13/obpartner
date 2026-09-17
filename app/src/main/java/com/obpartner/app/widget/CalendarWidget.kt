@@ -10,7 +10,9 @@ import androidx.glance.*
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
@@ -28,10 +30,13 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 /**
- * 桌面组件 1：日周月视图日历微件
- * Desktop Widget 1: Calendar View Widget (Supports Day/Week/Month views and click-to-open Obsidian)
+ * 桌面组件 1：日周月视图日历微件 (支持自适应缩放与布局调整)
+ * Desktop Widget 1: Calendar View Widget (Supports exact responsive sizing and layout adjustments)
  */
 class CalendarWidget : GlanceAppWidget() {
+
+    // 启用精确尺寸模式，支持用户在桌面自由拉伸缩放尺寸 (2x2, 3x2, 4x2, 4x3, 4x4)
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
@@ -64,14 +69,22 @@ class CalendarWidget : GlanceAppWidget() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
 
-        // 筛选本周与今日日程
+        // 筛选今日日程与近期日程
         val todayEvents = events.filter { CalendarUtils.isSameDay(Date(it.start), today) }
+        val upcomingEvents = if (todayEvents.isEmpty()) {
+            events.sortedBy { it.start }.take(5)
+        } else {
+            todayEvents
+        }
+
+        val isUpcomingMode = todayEvents.isEmpty() && upcomingEvents.isNotEmpty()
 
         Column(
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(Color(0xFF1E1E2E))
-                .padding(12.dp)
+                .cornerRadius(16.dp)
+                .padding(10.dp)
         ) {
             // 1. 顶部栏：当前日期、农历信息与打开主程序按钮
             Row(
@@ -83,15 +96,15 @@ class CalendarWidget : GlanceAppWidget() {
                         text = todayStr,
                         style = TextStyle(
                             color = ColorProvider(Color.White),
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
                     )
                     Text(
-                        text = "农历: $lunarText",
+                        text = "农历 $lunarText",
                         style = TextStyle(
                             color = ColorProvider(Color(0xFFB0BEC5)),
-                            fontSize = 11.sp
+                            fontSize = 10.sp
                         )
                     )
                 }
@@ -100,18 +113,25 @@ class CalendarWidget : GlanceAppWidget() {
                 Text(
                     text = "打开日历 ↗",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFF7C4DFF)),
-                        fontSize = 12.sp,
+                        color = ColorProvider(Color(0xFF9575CD)),
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     ),
                     modifier = GlanceModifier.clickable(actionStartActivity(mainActivityIntent))
                 )
             }
 
-            Spacer(modifier = GlanceModifier.height(8.dp))
+            Spacer(modifier = GlanceModifier.height(6.dp))
 
             // 2. 本周日期快速导航指示栏 (Mon ~ Sun)
-            Row(modifier = GlanceModifier.fillMaxWidth()) {
+            Row(
+                modifier = GlanceModifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF252638))
+                    .cornerRadius(6.dp)
+                    .padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 val dayFmt = SimpleDateFormat("d", Locale.getDefault())
                 val weekFmt = SimpleDateFormat("E", Locale.CHINESE)
 
@@ -123,18 +143,18 @@ class CalendarWidget : GlanceAppWidget() {
                         modifier = GlanceModifier
                             .defaultWeight()
                             .padding(horizontal = 1.dp)
-                            .background(if (isCurrent) Color(0xFF7C4DFF) else Color(0xFF2A2B3D)),
+                            .background(if (isCurrent) Color(0xFF7C4DFF) else Color.Transparent),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = weekFmt.format(date),
-                            style = TextStyle(color = ColorProvider(Color(0xFFB0BEC5)), fontSize = 9.sp)
+                            style = TextStyle(color = ColorProvider(if (isCurrent) Color.White else Color(0xFF90A4AE)), fontSize = 8.sp)
                         )
                         Text(
                             text = dayFmt.format(date),
                             style = TextStyle(
                                 color = ColorProvider(Color.White),
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
                             )
                         )
@@ -143,7 +163,7 @@ class CalendarWidget : GlanceAppWidget() {
                                 text = if (status == "work") "班" else "休",
                                 style = TextStyle(
                                     color = ColorProvider(if (status == "work") Color(0xFF90A4AE) else Color(0xFFFF5252)),
-                                    fontSize = 8.sp,
+                                    fontSize = 7.sp,
                                     fontWeight = FontWeight.Bold
                                 )
                             )
@@ -152,37 +172,46 @@ class CalendarWidget : GlanceAppWidget() {
                 }
             }
 
-            Spacer(modifier = GlanceModifier.height(8.dp))
+            Spacer(modifier = GlanceModifier.height(6.dp))
 
-            // 3. 今日日程列表 (点击笔记直达 Obsidian 打开)
+            // 3. 日程列表 (使用 defaultWeight() 避免撑爆布局)
+            val listTitle = if (isUpcomingMode) "近期日程 (${upcomingEvents.size})" else "今日日程 (${todayEvents.size})"
             Text(
-                text = "今日日程 (${todayEvents.size})",
-                style = TextStyle(color = ColorProvider(Color(0xFF80CBC4)), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                text = listTitle,
+                style = TextStyle(color = ColorProvider(Color(0xFF80CBC4)), fontSize = 11.sp, fontWeight = FontWeight.Bold)
             )
 
-            if (todayEvents.isEmpty()) {
+            if (upcomingEvents.isEmpty()) {
                 Box(
-                    modifier = GlanceModifier.fillMaxSize(),
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .defaultWeight(),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "今日暂无日程安排 🎉",
-                        style = TextStyle(color = ColorProvider(Color(0xFF78909C)), fontSize = 12.sp)
+                        text = if (events.isEmpty()) "暂未扫描到日程文件\n请在设置中检查路径与权限" else "暂无近期日程安排 🎉",
+                        style = TextStyle(color = ColorProvider(Color(0xFF78909C)), fontSize = 11.sp)
                     )
                 }
             } else {
-                LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                    items(todayEvents) { event ->
+                LazyColumn(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .defaultWeight()
+                ) {
+                    items(upcomingEvents) { event ->
                         val openObsidianIntent = storageManager.createOpenObsidianIntent(event.path)
-                        val timeStr = if (event.isAllDay) "全天" else
-                            "${CalendarUtils.formatTime(Date(event.start))} - ${CalendarUtils.formatTime(Date(event.end))}"
+                        val eventDateStr = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(event.start))
+                        val timeStr = if (event.isAllDay) "全天 ($eventDateStr)" else
+                            "$eventDateStr - ${CalendarUtils.formatTime(Date(event.end))}"
 
                         Row(
                             modifier = GlanceModifier
                                 .fillMaxWidth()
-                                .padding(vertical = 3.dp)
+                                .padding(vertical = 2.dp)
                                 .background(Color(0xFF2E2F45))
-                                .padding(8.dp)
+                                .cornerRadius(6.dp)
+                                .padding(6.dp)
                                 .clickable(actionStartActivity(openObsidianIntent)),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -191,7 +220,7 @@ class CalendarWidget : GlanceAppWidget() {
                                     text = event.title,
                                     style = TextStyle(
                                         color = ColorProvider(Color.White),
-                                        fontSize = 13.sp,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Medium
                                     )
                                 )
@@ -199,14 +228,14 @@ class CalendarWidget : GlanceAppWidget() {
                                     text = timeStr,
                                     style = TextStyle(
                                         color = ColorProvider(Color(0xFFB0BEC5)),
-                                        fontSize = 11.sp
+                                        fontSize = 10.sp
                                     )
                                 )
                             }
                             Text(
                                 text = "Obsidian ↗",
                                 style = TextStyle(
-                                    color = ColorProvider(Color(0xFF7C4DFF)),
+                                    color = ColorProvider(Color(0xFF9575CD)),
                                     fontSize = 10.sp
                                 )
                             )

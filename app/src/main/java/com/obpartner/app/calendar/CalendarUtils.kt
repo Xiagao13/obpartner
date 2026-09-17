@@ -22,18 +22,42 @@ object CalendarUtils {
     private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
+    private val defaultDateStringFormat = SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy", Locale.US)
+    private val extraFormats = arrayOf(
+        SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault()),
+        SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()),
+        SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()),
+        SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.getDefault()),
+        SimpleDateFormat("yyyy.MM.dd", Locale.getDefault())
+    )
+
     /**
-     * 解析各类日期时间字符串
-     * Parse various date/time string formats
+     * 解析各类日期时间对象或字符串 (支持 Date、时间戳、ISO 8601 与多种文本格式)
+     * Parse various date/time objects or strings (Supports Date, timestamps, ISO 8601, etc.)
      */
-    fun parseDate(dateStr: String?): Date? {
-        if (dateStr.isNullOrBlank()) return null
-        val cleanStr = dateStr.trim().replace("\"", "").replace("'", "")
+    fun parseDate(raw: Any?): Date? {
+        if (raw == null) return null
+        if (raw is Date) return raw
+        if (raw is Number) return Date(raw.toLong())
+
+        val dateStr = raw.toString().trim().replace("\"", "").replace("'", "")
+        if (dateStr.isBlank()) return null
+
         for (format in isoFormats) {
             try {
-                return format.parse(cleanStr)
+                return format.parse(dateStr)
             } catch (_: Exception) {
             }
+        }
+        for (format in extraFormats) {
+            try {
+                return format.parse(dateStr)
+            } catch (_: Exception) {
+            }
+        }
+        try {
+            return defaultDateStringFormat.parse(dateStr)
+        } catch (_: Exception) {
         }
         return null
     }

@@ -17,19 +17,19 @@ object MarkdownEventScanner {
         frontmatter: Map<String, Any>,
         settings: AppSettings
     ): CalendarEvent? {
-        val startStr = frontmatter[settings.startTimeProp]?.toString()
-            ?: frontmatter["event_date"]?.toString()
-            ?: frontmatter["start_date"]?.toString()
-            ?: frontmatter["date"]?.toString()
+        val startRaw = frontmatter[settings.startTimeProp]
+            ?: frontmatter["event_date"]
+            ?: frontmatter["start_date"]
+            ?: frontmatter["date"]
             ?: return null
 
-        val startDate = CalendarUtils.parseDate(startStr) ?: return null
+        val startDate = CalendarUtils.parseDate(startRaw) ?: return null
 
-        val endStr = frontmatter[settings.endTimeProp]?.toString()
-            ?: frontmatter["end_date"]?.toString()
+        val endRaw = frontmatter[settings.endTimeProp]
+            ?: frontmatter["end_date"]
 
-        val endDate = if (!endStr.isNullOrBlank()) {
-            CalendarUtils.parseDate(endStr) ?: Date(startDate.time + 3600000L)
+        val endDate = if (endRaw != null) {
+            CalendarUtils.parseDate(endRaw) ?: Date(startDate.time + 3600000L)
         } else {
             Date(startDate.time + 3600000L) // 默认 1 小时 / Default 1 hour
         }
@@ -40,7 +40,8 @@ object MarkdownEventScanner {
         val isAllDay = durationHours >= 20 || isCrossDay
 
         val colorVal = frontmatter[settings.colorGroupProp]?.toString() ?: "default"
-        val title = fileName.removeSuffix(".md")
+        val title = frontmatter["title"]?.toString()?.takeIf { it.isNotBlank() }
+            ?: fileName.removeSuffix(".md")
 
         return CalendarEvent(
             id = filePath,

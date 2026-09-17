@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import com.obpartner.app.calendar.CalendarUtils
 import com.obpartner.app.model.AppSettings
 import com.obpartner.app.model.CalendarEvent
@@ -26,6 +27,9 @@ class StorageManager(private val context: Context) {
 
     private val prefs: SharedPreferences =
         context.getSharedPreferences("obpartner_prefs", Context.MODE_PRIVATE)
+
+    var lastScanSummary: String = ""
+        private set
 
     fun getSettings(): AppSettings {
         return AppSettings(
@@ -57,13 +61,12 @@ class StorageManager(private val context: Context) {
     }
 
     /**
-     * 扫描指定目录下的全部 Markdown 文件并解析
-     * Scan and parse all Markdown files under specified folder paths
+     * 扫描 Markdown 文件并解析日程、任务与习惯
+     * Scan and parse all Markdown files under specified folder paths or SAF tree URIs
      */
     fun scanVault(): Triple<List<CalendarEvent>, List<TaskItem>, List<HabitItem>> {
         val settings = getSettings()
         val pathStr = settings.folderPath
-        if (pathStr.isBlank()) return Triple(emptyList(), emptyList(), emptyList())
 
         val events = mutableListOf<CalendarEvent>()
         val tasks = mutableListOf<TaskItem>()
@@ -80,34 +83,109 @@ class StorageManager(private val context: Context) {
         }
         val todayMidnight = cal.timeInMillis
 
-        val folders = pathStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        // 若用户未指定路径，自动尝试扫描安卓手机常见 Obsidian 笔记目录
+        val folders = if (pathStr.isNotBlank()) {
+            pathStr.split(",").map { it.trim().removeSuffix("/") }.filter { it.isNotEmpty() }
+        } else {
+            listOf(
+                "/storage/emulated/0/Documents/Obsidian",
+                "/storage/emulated/0/Documents",
+                "/storage/emulated/0/Obsidian",
+                "/sdcard/Documents/Obsidian",
+                "/sdcard/Obsidian"
+            )
+        }
+
+        var scannedFilesCount = 0
 
         for (fPath in folders) {
-            val dir = File(fPath)
-            if (dir.exists() && dir.isDirectory) {
-                dir.walkTopDown().filter { it.isFile && it.extension.equals("md", ignoreCase = true) }.forEach { file ->
-                    try {
-                        file.inputStream().use { stream ->
-                            val fm = FrontmatterScanner.scanFrontmatter(stream)
-                            if (fm.isNotEmpty()) {
-                                MarkdownEventScanner.parseEvent(file.absolutePath, file.name, fm, settings)?.let {
-                                    events.add(it)
-                                }
-                                MarkdownTaskScanner.parseTask(file.absolutePath, file.name, fm, settings, todayMidnight)?.let {
-                                    tasks.add(it)
-                                }
-                                MarkdownTaskScanner.parseHabit(file.absolutePath, file.name, fm, todayStr)?.let {
-                                    habits.add(it)
+            if (fPath.startsWith("content://")) {
+                // 1. SAF DocumentFile 模式 / Storage Access Framework Tree Uri
+                try {
+                    val treeUri = Uri.parse(fPath)
+                    val rootDoc = DocumentFile.fromTreeUri(context, treeUri)
+                    if (rootDoc != null && rootDoc.isDirectory) {
+                        scanDocumentDir(rootDoc, settings, todayMidnight, todayStr, events, tasks, habits) {
+                            scannedFilesCount++
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            } else {
+                // 2. 标准文件路径模式 / Standard File Path
+                try {
+                    val dir = File(fPath)
+                    if (dir.exists() && dir.isDirectory) {
+                        dir.walkTopDown()
+                            .filter { it.isFile && (it.extension.equals("md", ignoreCase = true) || it.extension.equals("markdown", ignoreCase = true)) }
+                            .forEach { file ->
+                                scannedFilesCount++
+                                try {
+                                    file.inputStream().use { stream ->
+                                        val fm = FrontmatterScanner.scanFrontmatter(stream)
+                                        if (fm.isNotEmpty()) {
+                                            MarkdownEventScanner.parseEvent(file.absolutePath, file.name, fm, settings)?.let {
+                                                events.add(it)
+                                            }
+                                            MarkdownTaskScanner.parseTask(file.absolutePath, file.name, fm, settings, todayMidnight)?.let {
+                                                tasks.add(it)
+                                            }
+                                            MarkdownTaskScanner.parseHabit(file.absolutePath, file.name, fm, todayStr)?.let {
+                                                habits.add(it)
+                                            }
+                                        }
+                                    }
+                                } catch (_: Exception) {
                                 }
                             }
-                        }
-                    } catch (_: Exception) {
                     }
+                } catch (_: Exception) {
                 }
             }
         }
 
+        lastScanSummary = "扫描完成：共扫描 $scannedFilesCount 个文件，解析出 ${events.size} 个日程，${tasks.size} 个待办，${habits.size} 个习惯"
+
         return Triple(events, tasks, habits)
+    }
+
+    private fun scanDocumentDir(
+        dir: DocumentFile,
+        settings: AppSettings,
+        todayMidnight: Long,
+        todayStr: String,
+        events: MutableList<CalendarEvent>,
+        tasks: MutableList<TaskItem>,
+        habits: MutableList<HabitItem>,
+        onFileScanned: () -> Unit
+    ) {
+        val files = dir.listFiles()
+        for (doc in files) {
+            if (doc.isDirectory) {
+                scanDocumentDir(doc, settings, todayMidnight, todayStr, events, tasks, habits, onFileScanned)
+            } else if (doc.isFile && (doc.name?.endsWith(".md", ignoreCase = true) == true || doc.name?.endsWith(".markdown", ignoreCase = true) == true)) {
+                onFileScanned()
+                try {
+                    context.contentResolver.openInputStream(doc.uri)?.use { stream ->
+                        val fm = FrontmatterScanner.scanFrontmatter(stream)
+                        if (fm.isNotEmpty()) {
+                            val name = doc.name ?: "Unknown"
+                            val path = doc.uri.toString()
+                            MarkdownEventScanner.parseEvent(path, name, fm, settings)?.let {
+                                events.add(it)
+                            }
+                            MarkdownTaskScanner.parseTask(path, name, fm, settings, todayMidnight)?.let {
+                                tasks.add(it)
+                            }
+                            MarkdownTaskScanner.parseHabit(path, name, fm, todayStr)?.let {
+                                habits.add(it)
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }
     }
 
     /**
@@ -119,23 +197,24 @@ class StorageManager(private val context: Context) {
         val vaultName = settings.obsidianVaultName
         val fileName = File(filePath).nameWithoutExtension
 
-        return if (vaultName.isNotBlank()) {
-            // 通过官方 obsidian:// URI scheme 直接定位笔记
+        val encodedFile = URLEncoder.encode(fileName, StandardCharsets.UTF_8.toString())
+        val uri = if (vaultName.isNotBlank()) {
             val encodedVault = URLEncoder.encode(vaultName, StandardCharsets.UTF_8.toString())
-            val encodedFile = URLEncoder.encode(fileName, StandardCharsets.UTF_8.toString())
-            val uri = Uri.parse("obsidian://open?vault=$encodedVault&file=$encodedFile")
+            Uri.parse("obsidian://open?vault=$encodedVault&file=$encodedFile")
+        } else {
+            Uri.parse("obsidian://open?file=$encodedFile")
+        }
+
+        return try {
             Intent(Intent.ACTION_VIEW, uri).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-        } else {
-            // 兜底方案：通过标准文件查看 Intent 呼起 Obsidian
-            val file = File(filePath)
-            val uri = Uri.fromFile(file)
+        } catch (_: Exception) {
+            // 备选方案
             Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "text/markdown")
+                setDataAndType(Uri.parse(filePath), "text/markdown")
                 setPackage("md.obsidian")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
     }

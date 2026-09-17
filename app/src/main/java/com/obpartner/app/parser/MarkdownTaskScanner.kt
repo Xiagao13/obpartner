@@ -32,16 +32,16 @@ object MarkdownTaskScanner {
         val parentId = parentRaw?.replace("[", "")?.replace("]", "")?.split("|")?.firstOrNull()?.trim()
 
         // 提取起止时间
-        val startStr = frontmatter[settings.taskStartKey]?.toString()
-            ?: frontmatter["start_date"]?.toString()
-            ?: frontmatter["date"]?.toString()
-        val endStr = frontmatter[settings.taskEndKey]?.toString()
-            ?: frontmatter["due_date"]?.toString()
-            ?: frontmatter["end_date"]?.toString()
-            ?: frontmatter["date"]?.toString()
+        val startRaw = frontmatter[settings.taskStartKey]
+            ?: frontmatter["start_date"]
+            ?: frontmatter["date"]
+        val endRaw = frontmatter[settings.taskEndKey]
+            ?: frontmatter["due_date"]
+            ?: frontmatter["end_date"]
+            ?: frontmatter["date"]
 
-        val explicitStart = CalendarUtils.parseDate(startStr)?.time
-        val explicitEnd = CalendarUtils.parseDate(endStr)?.time
+        val explicitStart = CalendarUtils.parseDate(startRaw)?.time
+        val explicitEnd = CalendarUtils.parseDate(endRaw)?.time
 
         val isOverdue = !status.equals("Done", ignoreCase = true) &&
                 explicitEnd != null && explicitEnd < todayMidnight

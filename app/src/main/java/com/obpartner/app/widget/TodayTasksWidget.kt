@@ -12,9 +12,11 @@ import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
@@ -32,10 +34,13 @@ import java.io.File
 import java.util.Date
 
 /**
- * 桌面组件 2：当日任务组件
- * Desktop Widget 2: Today Tasks Widget (Displays overdue & today's tasks with completion and Obsidian launch)
+ * 桌面组件 2：当日任务组件 (支持自适应缩放与直接勾选完成)
+ * Desktop Widget 2: Today Tasks Widget (Supports exact responsive sizing, completion toggle, and Obsidian launch)
  */
 class TodayTasksWidget : GlanceAppWidget() {
+
+    // 启用精确尺寸模式，支持用户在桌面自由拉伸缩放尺寸 (2x2, 3x2, 4x2, 4x3, 4x4)
+    override val sizeMode: SizeMode = SizeMode.Exact
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
@@ -49,6 +54,7 @@ class TodayTasksWidget : GlanceAppWidget() {
                 context = context,
                 overdueTasks = overdueTasks,
                 doingTasks = doingTasks,
+                totalTasksCount = tasks.size,
                 storageManager = storageManager
             )
         }
@@ -59,6 +65,7 @@ class TodayTasksWidget : GlanceAppWidget() {
         context: Context,
         overdueTasks: List<TaskItem>,
         doingTasks: List<TaskItem>,
+        totalTasksCount: Int,
         storageManager: StorageManager
     ) {
         val mainActivityIntent = Intent(context, MainActivity::class.java).apply {
@@ -69,7 +76,8 @@ class TodayTasksWidget : GlanceAppWidget() {
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(Color(0xFF181824))
-                .padding(12.dp)
+                .cornerRadius(16.dp)
+                .padding(10.dp)
         ) {
             // 顶部表头
             Row(
@@ -80,7 +88,7 @@ class TodayTasksWidget : GlanceAppWidget() {
                     text = "今日待办",
                     style = TextStyle(
                         color = ColorProvider(Color.White),
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     ),
                     modifier = GlanceModifier.defaultWeight()
@@ -89,8 +97,8 @@ class TodayTasksWidget : GlanceAppWidget() {
                 Text(
                     text = "打开待办 ↗",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFF7C4DFF)),
-                        fontSize = 12.sp,
+                        color = ColorProvider(Color(0xFF9575CD)),
+                        fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     ),
                     modifier = GlanceModifier.clickable(actionStartActivity(mainActivityIntent))
@@ -101,16 +109,23 @@ class TodayTasksWidget : GlanceAppWidget() {
 
             if (overdueTasks.isEmpty() && doingTasks.isEmpty()) {
                 Box(
-                    modifier = GlanceModifier.fillMaxSize(),
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .defaultWeight(),
                     contentAlignment = Alignment.Center
                 ) {
+                    val emptyMsg = if (totalTasksCount > 0) "今日待办已全部搞定 🎉" else "暂未扫描到待办文件\n请在设置中配置路径与权限"
                     Text(
-                        text = "今日任务全部搞定 🎉",
-                        style = TextStyle(color = ColorProvider(Color(0xFF81C784)), fontSize = 13.sp)
+                        text = emptyMsg,
+                        style = TextStyle(color = ColorProvider(Color(0xFF81C784)), fontSize = 11.sp)
                     )
                 }
             } else {
-                LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = GlanceModifier
+                        .fillMaxWidth()
+                        .defaultWeight()
+                ) {
                     // 1. 超期任务展示
                     if (overdueTasks.isNotEmpty()) {
                         item {
@@ -164,6 +179,7 @@ class TodayTasksWidget : GlanceAppWidget() {
                 .fillMaxWidth()
                 .padding(vertical = 2.dp)
                 .background(Color(0xFF262738))
+                .cornerRadius(6.dp)
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -172,6 +188,7 @@ class TodayTasksWidget : GlanceAppWidget() {
                 modifier = GlanceModifier
                     .size(20.dp)
                     .background(Color(0xFF3F4158))
+                    .cornerRadius(4.dp)
                     .clickable(
                         actionRunCallback<ToggleTaskActionCallback>(
                             actionParametersOf(ToggleTaskActionCallback.taskPathKey to task.path)
@@ -214,7 +231,7 @@ class TodayTasksWidget : GlanceAppWidget() {
 
             Text(
                 text = "↗",
-                style = TextStyle(color = ColorProvider(Color(0xFF7C4DFF)), fontSize = 12.sp),
+                style = TextStyle(color = ColorProvider(Color(0xFF9575CD)), fontSize = 12.sp),
                 modifier = GlanceModifier.clickable(actionStartActivity(openObsidianIntent))
             )
         }

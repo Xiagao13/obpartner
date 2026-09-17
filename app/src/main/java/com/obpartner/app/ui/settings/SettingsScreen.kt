@@ -1,12 +1,27 @@
 package com.obpartner.app.ui.settings
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -15,8 +30,8 @@ import com.obpartner.app.data.StorageManager
 import com.obpartner.app.model.AppSettings
 
 /**
- * 设置界面 (配置文件夹路径、Obsidian 库名、周起始日及属性映射)
- * Settings Screen (Configure folder paths, Obsidian vault name, week start day and property keys)
+ * 设置界面 (配置文件夹路径、系统授权、Obsidian 库名、周起始日及属性映射)
+ * Settings Screen (Configure folder paths, system permissions, Obsidian vault name, week start day and property keys)
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,6 +51,32 @@ fun SettingsScreen(
     var taskStartKey by remember { mutableStateOf(currentSettings.taskStartKey) }
     var taskEndKey by remember { mutableStateOf(currentSettings.taskEndKey) }
 
+    // SAF 文件夹选择器
+    val folderPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: Exception) {
+            }
+            folderPath = uri.toString()
+            Toast.makeText(context, "已选取文件夹: $uri", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 检查所有文件访问权限 (Android 11+)
+    val hasAllFilesAccess = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            true
+        }
+    }
+
     val scrollState = rememberScrollState()
 
     Column(
@@ -51,14 +92,84 @@ fun SettingsScreen(
             fontWeight = FontWeight.Bold
         )
 
-        // 1. 文件夹路径 / Folder Paths
-        OutlinedTextField(
-            value = folderPath,
-            onValueChange = { folderPath = it },
-            label = { Text("Markdown 文件夹路径 (支持英文逗号分隔)") },
-            placeholder = { Text("/sdcard/Documents/ObsidianVault/Daily") },
-            modifier = Modifier.fillMaxWidth()
-        )
+        // 权限状态警示条
+        if (!hasAllFilesAccess) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "尚未授予【所有文件访问权限】",
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                    Text(
+                        text = "Android 11+ 系统需要此权限以读取手机外部存储中的 Markdown 笔记。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(vertical = 6.dp)
+                    )
+                    Button(
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                try {
+                                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                                        data = Uri.parse("package:${context.packageName}")
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("前往系统设置授权")
+                    }
+                }
+            }
+        }
+
+        // 上次扫描结果反馈
+        if (storageManager.lastScanSummary.isNotBlank()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = storageManager.lastScanSummary,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+
+        // 1. 文件夹路径与选择器 / Folder Paths
+        Column {
+            OutlinedTextField(
+                value = folderPath,
+                onValueChange = { folderPath = it },
+                label = { Text("Markdown 文件夹路径") },
+                placeholder = { Text("/sdcard/Documents/Obsidian 或 点击右侧选择") },
+                supportingText = { Text("留空时会自动尝试扫描系统默认 Documents/Obsidian 目录") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Button(
+                onClick = { folderPicker.launch(null) },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.FolderOpen, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("打开系统文件选择器选取文件夹 (SAF)")
+            }
+        }
 
         // 2. Obsidian 仓库名 (用于一键直达跳转) / Obsidian Vault Name
         OutlinedTextField(
@@ -66,7 +177,7 @@ fun SettingsScreen(
             onValueChange = { obsidianVault = it },
             label = { Text("Obsidian 仓库名称 (用于点击笔记直接呼起)") },
             placeholder = { Text("例如: MyVault") },
-            supportingText = { Text("若填写，点击桌面或应用中的日程将以 obsidian://open 协议极速呼起") },
+            supportingText = { Text("若填写，点击桌面小部件上的日程将以 obsidian://open 协议秒开该笔记") },
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -142,7 +253,7 @@ fun SettingsScreen(
                     taskEndKey = taskEndKey.trim()
                 )
                 storageManager.saveSettings(newSettings)
-                Toast.makeText(context, "配置已保存", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "配置已保存，正在重新扫描...", Toast.LENGTH_SHORT).show()
                 onSettingsSaved()
             },
             modifier = Modifier.fillMaxWidth().height(48.dp)

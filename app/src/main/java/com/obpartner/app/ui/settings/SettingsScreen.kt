@@ -50,6 +50,11 @@ fun SettingsScreen(
     var endTimeProp by remember { mutableStateOf(currentSettings.endTimeProp) }
     var taskStartKey by remember { mutableStateOf(currentSettings.taskStartKey) }
     var taskEndKey by remember { mutableStateOf(currentSettings.taskEndKey) }
+    var colorGroupProp by remember { mutableStateOf(currentSettings.colorGroupProp) }
+    var displayProp by remember { mutableStateOf(currentSettings.displayProp) }
+    var displayFields by remember { mutableStateOf(currentSettings.displayFields) }
+    var showContent by remember { mutableStateOf(currentSettings.showContent) }
+
 
     // SAF 文件夹选择器
     val folderPicker = rememberLauncherForActivityResult(
@@ -240,6 +245,50 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        OutlinedTextField(
+            value = colorGroupProp,
+            onValueChange = { colorGroupProp = it },
+            label = { Text("颜色分组属性键 (默认: student，可按学员或类别生成主题色)") },
+            supportingText = { Text("如: student, category, type 等，将按此属性哈希出唯美色彩") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = displayProp,
+            onValueChange = { displayProp = it },
+            label = { Text("卡片主标题属性键 (留空时默认使用笔记文件名或 title)") },
+            placeholder = { Text("例如: student") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = displayFields,
+            onValueChange = { displayFields = it },
+            label = { Text("卡片内部展示的扩展字段 (英文逗号分隔)") },
+            placeholder = { Text("例如: student, 上课位置, 计价, 计费课时") },
+            supportingText = { Text("周/日视图及桌面大卡片将在日程下方紧凑显示这些元数据") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("在日程卡片内展开扩展字段", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                Text("关闭后仅展示标题与时间段，开启后渲染如地点、金额等", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Switch(
+                checked = showContent,
+                onCheckedChange = { showContent = it }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         Button(
             onClick = {
                 val newSettings = AppSettings(
@@ -250,7 +299,11 @@ fun SettingsScreen(
                     startTimeProp = startTimeProp.trim(),
                     endTimeProp = endTimeProp.trim(),
                     taskStartKey = taskStartKey.trim(),
-                    taskEndKey = taskEndKey.trim()
+                    taskEndKey = taskEndKey.trim(),
+                    colorGroupProp = colorGroupProp.trim(),
+                    displayProp = displayProp.trim(),
+                    displayFields = displayFields.trim(),
+                    showContent = showContent
                 )
                 storageManager.saveSettings(newSettings)
                 Toast.makeText(context, "配置已保存，正在重新扫描...", Toast.LENGTH_SHORT).show()
@@ -262,3 +315,4 @@ fun SettingsScreen(
         }
     }
 }
+

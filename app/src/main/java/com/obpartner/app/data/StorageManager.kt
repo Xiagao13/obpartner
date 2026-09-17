@@ -41,7 +41,10 @@ class StorageManager(private val context: Context) {
             endTimeProp = prefs.getString("end_time_prop", "end_time") ?: "end_time",
             taskStartKey = prefs.getString("task_start_key", "start_date") ?: "start_date",
             taskEndKey = prefs.getString("task_end_key", "due_date") ?: "due_date",
-            colorGroupProp = prefs.getString("color_group_prop", "category") ?: "category"
+            colorGroupProp = prefs.getString("color_group_prop", "student") ?: "student",
+            displayProp = prefs.getString("display_prop", "") ?: "",
+            displayFields = prefs.getString("display_fields", "student, 上课位置, 计价") ?: "student, 上课位置, 计价",
+            showContent = prefs.getBoolean("show_content", true)
         )
     }
 
@@ -56,9 +59,13 @@ class StorageManager(private val context: Context) {
             putString("task_start_key", settings.taskStartKey)
             putString("task_end_key", settings.taskEndKey)
             putString("color_group_prop", settings.colorGroupProp)
+            putString("display_prop", settings.displayProp)
+            putString("display_fields", settings.displayFields)
+            putBoolean("show_content", settings.showContent)
             apply()
         }
     }
+
 
     /**
      * 扫描 Markdown 文件并解析日程、任务与习惯

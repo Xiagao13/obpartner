@@ -12,7 +12,10 @@ package com.obpartner.app.model
  * @param endTimeProp 日程结束时间键名 (默认 "end_time") / Property name for event end
  * @param taskStartKey 任务开始时间键名 (默认 "start_date") / Property name for task start
  * @param taskEndKey 任务截止时间键名 (默认 "due_date") / Property name for task due
- * @param colorGroupProp 分组色彩键名 (默认 "category") / Property name for color grouping
+ * @param colorGroupProp 分组色彩键名 (默认 "student"，可根据属性着色) / Property name for color grouping
+ * @param displayProp 主标题显示键名 (如 "student"，为空时使用笔记标题) / Property name for display title
+ * @param displayFields 卡片内部展示的扩展字段列表 (逗号分隔) / Comma-separated fields to display in card
+ * @param showContent 是否在日程卡片内展示扩展字段 / Whether to show extra content fields in card
  */
 data class AppSettings(
     val folderPath: String = "",
@@ -23,5 +26,9 @@ data class AppSettings(
     val endTimeProp: String = "end_time",
     val taskStartKey: String = "start_date",
     val taskEndKey: String = "due_date",
-    val colorGroupProp: String = "category"
+    val colorGroupProp: String = "student",
+    val displayProp: String = "",
+    val displayFields: String = "student, 上课位置, 计价",
+    val showContent: Boolean = true
 )
+

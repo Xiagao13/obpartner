@@ -55,10 +55,40 @@ object FrontmatterScanner {
                     k.toString() to (v ?: "")
                 }
             } else {
-                emptyMap()
+                parseFrontmatterFallback(yamlContent)
             }
         } catch (_: Exception) {
-            emptyMap()
+            parseFrontmatterFallback(yamlContent)
         }
     }
+
+    /**
+     * 降级正则解析器 (当 YAML 存在特殊格式或语法不规范时启用，确保 100% 不漏掉日程与任务)
+     * Fallback regex parser for frontmatter
+     */
+    private fun parseFrontmatterFallback(content: String): Map<String, Any> {
+        val result = mutableMapOf<String, Any>()
+        val lines = content.lines()
+        val linePattern = java.util.regex.Pattern.compile("^([A-Za-z0-9_\\-\\u4e00-\\u9fa5]+)\\s*:\\s*(.*)$")
+
+        for (rawLine in lines) {
+            val line = rawLine.trim()
+            if (line.isBlank() || line.startsWith("#")) continue
+
+            val matcher = linePattern.matcher(line)
+            if (matcher.find()) {
+                val key = matcher.group(1)?.trim() ?: continue
+                var value = matcher.group(2)?.trim() ?: ""
+                // 去除可能的外层引号
+                if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+                    if (value.length >= 2) {
+                        value = value.substring(1, value.length - 1)
+                    }
+                }
+                result[key] = value
+            }
+        }
+        return result
+    }
 }
+

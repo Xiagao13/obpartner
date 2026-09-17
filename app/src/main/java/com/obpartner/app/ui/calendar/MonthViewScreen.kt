@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.obpartner.app.calendar.CalendarUtils
+import com.obpartner.app.calendar.ColorUtils
 import com.obpartner.app.calendar.LunarHelper
 import com.obpartner.app.data.StorageManager
 import com.obpartner.app.model.AppSettings
@@ -224,16 +225,19 @@ fun MonthViewScreen(
                                     .padding(10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                val accentColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "border")
+                                val displayTitle = if (event.displayText.isNotBlank()) event.displayText else event.title
+
                                 Box(
                                     modifier = Modifier
                                         .width(4.dp)
-                                        .height(32.dp)
-                                        .background(AccentPrimary, RoundedCornerShape(2.dp))
+                                        .height(36.dp)
+                                        .background(accentColor, RoundedCornerShape(2.dp))
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = event.title,
+                                        text = displayTitle,
                                         fontWeight = FontWeight.SemiBold,
                                         fontSize = 14.sp
                                     )
@@ -244,17 +248,34 @@ fun MonthViewScreen(
                                         fontSize = 12.sp,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+                                    if (settings.showContent) {
+                                        val fieldKeys = settings.displayFields.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                                        val extraDetails = fieldKeys.mapNotNull { key ->
+                                            val v = event.extraData[key]?.toString()
+                                            if (!v.isNullOrBlank() && v != displayTitle) "$key: $v" else null
+                                        }.joinToString("  •  ")
+                                        if (extraDetails.isNotBlank()) {
+                                            Text(
+                                                text = extraDetails,
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
                                 }
                                 Text(
                                     text = "在 Obsidian 打开 ↗",
                                     fontSize = 11.sp,
-                                    color = AccentPrimary
+                                    color = accentColor
                                 )
                             }
                         }
                     }
                 }
             }
+
         }
     }
 }
@@ -341,16 +362,22 @@ private fun MonthCellItem(
             if (dayEvents.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(2.dp))
                 val firstEvent = dayEvents.first()
+                val pillBg = ColorUtils.stringToColor(firstEvent.colorValue, isDark = true, mode = "bg")
+                val pillText = ColorUtils.stringToColor(firstEvent.colorValue, isDark = true, mode = "text")
+                val pillBorder = ColorUtils.stringToColor(firstEvent.colorValue, isDark = true, mode = "border")
+                val displayTitle = if (firstEvent.displayText.isNotBlank()) firstEvent.displayText else firstEvent.title
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(2.dp))
-                        .background(AccentPrimary.copy(alpha = 0.8f))
+                        .background(pillBg)
+                        .border(0.5.dp, pillBorder, RoundedCornerShape(2.dp))
                         .padding(horizontal = 2.dp, vertical = 0.5.dp)
                 ) {
                     Text(
-                        text = firstEvent.title,
-                        color = Color.White,
+                        text = displayTitle,
+                        color = pillText,
                         fontSize = 7.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -360,11 +387,12 @@ private fun MonthCellItem(
                     Text(
                         text = "+${dayEvents.size - 1}",
                         fontSize = 7.sp,
-                        color = AccentPrimary,
+                        color = pillBorder,
                         modifier = Modifier.padding(top = 0.5.dp)
                     )
                 }
             }
+
         }
     }
 }

@@ -163,18 +163,34 @@ fun MainAppScreen() {
                         "day" -> DayViewScreen(
                             events = events,
                             settings = settings,
-                            onEventClick = { /* Clicked */ }
+                            onEventClick = { ev ->
+                                try {
+                                    val intent = storageManager.createOpenObsidianIntent(ev.path)
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {}
+                            }
                         )
                         "week" -> WeekViewScreen(
                             events = events,
                             settings = settings,
-                            onEventClick = { /* Clicked */ }
+                            onEventClick = { ev ->
+                                try {
+                                    val intent = storageManager.createOpenObsidianIntent(ev.path)
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {}
+                            }
                         )
                         "month" -> MonthViewScreen(
                             events = events,
                             settings = settings,
-                            onEventClick = { /* Clicked */ }
+                            onEventClick = { ev ->
+                                try {
+                                    val intent = storageManager.createOpenObsidianIntent(ev.path)
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {}
+                            }
                         )
+
                     }
                 }
                 1 -> {

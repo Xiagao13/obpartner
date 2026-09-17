@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.obpartner.app.calendar.CalendarUtils
+import com.obpartner.app.calendar.ColorUtils
 import com.obpartner.app.calendar.EventOverlapCalculator
 import com.obpartner.app.calendar.LunarHelper
 import com.obpartner.app.data.StorageManager
@@ -168,7 +169,7 @@ fun WeekViewScreen(
                                 val isToday = CalendarUtils.isSameDay(date, currentTime)
                                 val dayEvents = timedEventsByDate[date] ?: emptyList()
 
-                                Box(
+                                BoxWithConstraints(
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(hourHeight * 24)
@@ -177,6 +178,8 @@ fun WeekViewScreen(
                                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
                                         )
                                 ) {
+                                    val colWidth = maxWidth
+
                                     // 背景小时网格横线 / Hour horizontal dividing lines
                                     for (h in 1..23) {
                                         Box(
@@ -203,27 +206,35 @@ fun WeekViewScreen(
                                         )
                                     }
 
-                                    // 渲染计算好重叠泳道的日程卡片 / Render timed events with overlap lanes
+                                    // 渲染计算好重叠泳道的日程卡片 (1:1 对齐 Freepace calculateEventOverlaps 泳道并列)
                                     dayEvents.forEach { event ->
                                         val eventCal = Calendar.getInstance().apply { time = Date(event.start) }
                                         val startMinutes = eventCal.get(Calendar.HOUR_OF_DAY) * 60 + eventCal.get(Calendar.MINUTE)
-                                        val durationMinutes = ((event.end - event.start) / 60000L).coerceAtLeast(30L)
+                                        val durationMinutes = ((event.end - event.start) / 60000L).coerceAtLeast(25L)
 
                                         val topOffset = hourHeight * (startMinutes / 60f)
-                                        val itemHeight = hourHeight * (durationMinutes / 60f)
+                                        val itemHeight = (hourHeight * (durationMinutes / 60f)).coerceAtLeast(26.dp)
 
-                                        // 根据 overlapIndex 与 overlapCount 动态并列排布
-                                        val columnFraction = 1f / event.overlapCount
-                                        val startPaddingFraction = event.overlapIndex * columnFraction
+                                        // 核心并列排布算法：宽度 = 总宽 / overlapCount，X轴偏移 = 宽度 * overlapIndex
+                                        val overlapCount = kotlin.math.max(1, event.overlapCount)
+                                        val overlapIndex = event.overlapIndex.coerceIn(0, overlapCount - 1)
+                                        val itemWidth = colWidth / overlapCount
+                                        val xOffset = itemWidth * overlapIndex
+
+                                        val bgColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "bg")
+                                        val borderColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "border")
+                                        val textColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "text")
+                                        val displayTitle = if (event.displayText.isNotBlank()) event.displayText else event.title
 
                                         Box(
                                             modifier = Modifier
-                                                .fillMaxWidth(fraction = columnFraction)
-                                                .offset(y = topOffset)
-                                                .padding(horizontal = 1.dp)
+                                                .width(itemWidth)
+                                                .offset(x = xOffset, y = topOffset)
+                                                .padding(horizontal = 0.5.dp)
                                                 .height(itemHeight)
                                                 .clip(RoundedCornerShape(4.dp))
-                                                .background(AccentPrimary.copy(alpha = 0.85f))
+                                                .background(bgColor)
+                                                .border(1.dp, borderColor, RoundedCornerShape(4.dp))
                                                 .clickable {
                                                     // 点击直达打开 Obsidian 笔记 / Click opens Obsidian directly
                                                     storageManager.createOpenObsidianIntent(event.path)
@@ -232,26 +243,45 @@ fun WeekViewScreen(
                                                 }
                                                 .padding(3.dp)
                                         ) {
-                                            Column {
+                                            Column(modifier = Modifier.fillMaxSize()) {
                                                 Text(
-                                                    text = event.title,
-                                                    color = Color.White,
-                                                    fontSize = 10.sp,
+                                                    text = displayTitle,
+                                                    color = textColor,
+                                                    fontSize = 9.5.sp,
                                                     fontWeight = FontWeight.Bold,
-                                                    maxLines = 2,
+                                                    maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
                                                 Text(
-                                                    text = CalendarUtils.formatTime(Date(event.start)),
-                                                    color = Color.White.copy(alpha = 0.8f),
-                                                    fontSize = 9.sp
+                                                    text = "${CalendarUtils.formatTime(Date(event.start))} - ${CalendarUtils.formatTime(Date(event.end))}",
+                                                    color = Color.White.copy(alpha = 0.85f),
+                                                    fontSize = 8.sp,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
                                                 )
+                                                // Freepace 扩展内容与属性字段展示
+                                                if (settings.showContent && itemHeight >= 46.dp) {
+                                                    val fieldKeys = settings.displayFields.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                                                    for (fKey in fieldKeys) {
+                                                        val fVal = event.extraData[fKey]?.toString()
+                                                        if (!fVal.isNullOrBlank() && fVal != displayTitle) {
+                                                            Text(
+                                                                text = "$fKey: $fVal",
+                                                                color = Color.White.copy(alpha = 0.75f),
+                                                                fontSize = 7.5.sp,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
+
                     }
                 }
             }
@@ -361,24 +391,31 @@ private fun AllDayEventsRow(
                         .padding(horizontal = 2.dp)
                 ) {
                     dayAllDayEvents.forEach { event ->
+                        val bgColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "bg")
+                        val borderColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "border")
+                        val textColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "text")
+                        val displayTitle = if (event.displayText.isNotBlank()) event.displayText else event.title
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 1.dp)
                                 .clip(RoundedCornerShape(3.dp))
-                                .background(AccentPrimary.copy(alpha = 0.7f))
+                                .background(bgColor)
+                                .border(1.dp, borderColor, RoundedCornerShape(3.dp))
                                 .clickable { onEventClick(event) }
                                 .padding(2.dp)
                         ) {
                             Text(
-                                text = event.title,
+                                text = displayTitle,
                                 fontSize = 9.sp,
-                                color = Color.White,
+                                color = textColor,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
+
                 }
             }
         }

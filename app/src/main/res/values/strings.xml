@@ -1,7 +1,12 @@
 <resources>
     <string name="app_name">OBpartner</string>
     <string name="widget_calendar_title">OBpartner 日历视图</string>
+    <string name="widget_calendar_4x2_title">OBpartner 日历 (4×2 紧凑)</string>
+    <string name="widget_calendar_4x4_title">OBpartner 日历 (4×4 大卡片)</string>
     <string name="widget_today_tasks_title">OBpartner 今日待办</string>
+    <string name="widget_today_tasks_4x2_title">OBpartner 待办 (4×2 列表)</string>
+    <string name="widget_today_tasks_2x2_title">OBpartner 待办 (2×2 方块)</string>
+
 
     <string name="tab_calendar">日历</string>
     <string name="tab_tasks">今日任务</string>

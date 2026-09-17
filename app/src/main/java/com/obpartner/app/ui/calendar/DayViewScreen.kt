@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.obpartner.app.calendar.CalendarUtils
+import com.obpartner.app.calendar.ColorUtils
 import com.obpartner.app.calendar.EventOverlapCalculator
 import com.obpartner.app.calendar.LunarHelper
 import com.obpartner.app.data.StorageManager
@@ -156,19 +157,25 @@ fun DayViewScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     allDayEvents.forEach { ev ->
+                        val bgColor = ColorUtils.stringToColor(ev.colorValue, isDark = true, mode = "bg")
+                        val borderColor = ColorUtils.stringToColor(ev.colorValue, isDark = true, mode = "border")
+                        val textColor = ColorUtils.stringToColor(ev.colorValue, isDark = true, mode = "text")
+                        val displayTitle = if (ev.displayText.isNotBlank()) ev.displayText else ev.title
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 2.dp)
                                 .clip(RoundedCornerShape(4.dp))
-                                .background(AccentPrimary.copy(alpha = 0.8f))
+                                .background(bgColor)
+                                .border(1.dp, borderColor, RoundedCornerShape(4.dp))
                                 .clickable {
                                     storageManager.createOpenObsidianIntent(ev.path).let { context.startActivity(it) }
                                     onEventClick(ev)
                                 }
                                 .padding(6.dp)
                         ) {
-                            Text(text = ev.title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text(text = displayTitle, color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -206,13 +213,15 @@ fun DayViewScreen(
                     }
                 }
 
-                // 右侧日程排布区 / Events Column
-                Box(
+                // 右侧日程排布区 / Events Column (支持 BoxWithConstraints 多泳道重叠并列)
+                BoxWithConstraints(
                     modifier = Modifier
                         .weight(1f)
                         .height(hourHeight * 24)
                         .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
                 ) {
+                    val colWidth = maxWidth
+
                     for (h in 1..23) {
                         Box(
                             modifier = Modifier
@@ -242,43 +251,72 @@ fun DayViewScreen(
                         val durationMinutes = ((event.end - event.start) / 60000L).coerceAtLeast(30L)
 
                         val topOffset = hourHeight * (startMinutes / 60f)
-                        val itemHeight = hourHeight * (durationMinutes / 60f)
+                        val itemHeight = (hourHeight * (durationMinutes / 60f)).coerceAtLeast(32.dp)
 
-                        val columnFraction = 1f / event.overlapCount
+                        // 核心并列排布算法：宽度 = 总宽 / overlapCount，X轴偏移 = 宽度 * overlapIndex
+                        val overlapCount = kotlin.math.max(1, event.overlapCount)
+                        val overlapIndex = event.overlapIndex.coerceIn(0, overlapCount - 1)
+                        val itemWidth = colWidth / overlapCount
+                        val xOffset = itemWidth * overlapIndex
+
+                        val bgColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "bg")
+                        val borderColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "border")
+                        val textColor = ColorUtils.stringToColor(event.colorValue, isDark = true, mode = "text")
+                        val displayTitle = if (event.displayText.isNotBlank()) event.displayText else event.title
 
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth(fraction = columnFraction)
-                                .offset(y = topOffset)
-                                .padding(horizontal = 2.dp)
+                                .width(itemWidth)
+                                .offset(x = xOffset, y = topOffset)
+                                .padding(horizontal = 1.dp)
                                 .height(itemHeight)
                                 .clip(RoundedCornerShape(6.dp))
-                                .background(AccentPrimary.copy(alpha = 0.85f))
+                                .background(bgColor)
+                                .border(1.dp, borderColor, RoundedCornerShape(6.dp))
                                 .clickable {
                                     storageManager.createOpenObsidianIntent(event.path).let { context.startActivity(it) }
                                     onEventClick(event)
                                 }
                                 .padding(6.dp)
                         ) {
-                            Column {
+                            Column(modifier = Modifier.fillMaxSize()) {
                                 Text(
-                                    text = event.title,
-                                    color = Color.White,
+                                    text = displayTitle,
+                                    color = textColor,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    maxLines = 2,
+                                    maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = "${CalendarUtils.formatTime(Date(event.start))} - ${CalendarUtils.formatTime(Date(event.end))}",
                                     color = Color.White.copy(alpha = 0.85f),
-                                    fontSize = 10.sp
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
+                                // Freepace 扩展内容与属性字段展示
+                                if (settings.showContent && itemHeight >= 55.dp) {
+                                    val fieldKeys = settings.displayFields.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                                    for (fKey in fieldKeys) {
+                                        val fVal = event.extraData[fKey]?.toString()
+                                        if (!fVal.isNullOrBlank() && fVal != displayTitle) {
+                                            Text(
+                                                text = "$fKey: $fVal",
+                                                color = Color.White.copy(alpha = 0.8f),
+                                                fontSize = 9.5.sp,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
+
     }
 }

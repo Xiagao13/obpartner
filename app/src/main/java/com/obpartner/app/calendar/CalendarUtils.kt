@@ -1,9 +1,16 @@
 package com.obpartner.app.calendar
 
 import java.text.SimpleDateFormat
+import java.time.Instant
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.regex.Pattern
 
 /**
  * 日历计算与格式化工具类
@@ -11,19 +18,19 @@ import java.util.Locale
  */
 object CalendarUtils {
 
-    private val isoFormats = arrayOf(
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()),
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.getDefault()),
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()),
-        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()),
-        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    )
+    private val dateRegex = Pattern.compile("(\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2})")
+    private val timeRegex = Pattern.compile("(\\d{1,2}:\\d{2}(?::\\d{2})?)")
 
     private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     private val defaultDateStringFormat = SimpleDateFormat("EEE MMM dd HH:mm:ss zzz yyyy", Locale.US)
     private val extraFormats = arrayOf(
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()),
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm", Locale.getDefault()),
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()),
+        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()),
+        SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()),
         SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault()),
         SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()),
         SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()),
@@ -32,8 +39,8 @@ object CalendarUtils {
     )
 
     /**
-     * 解析各类日期时间对象或字符串 (支持 Date、时间戳、ISO 8601 与多种文本格式)
-     * Parse various date/time objects or strings (Supports Date, timestamps, ISO 8601, etc.)
+     * 解析各类日期时间对象或字符串 (优先通过 java.time 兼容各种 ISO 8601 时区及毫秒格式)
+     * Parse various date/time objects or strings (Supports java.time ISO 8601 with timezone, Date, timestamps, etc.)
      */
     fun parseDate(raw: Any?): Date? {
         if (raw == null) return null
@@ -43,24 +50,104 @@ object CalendarUtils {
         val dateStr = raw.toString().trim().replace("\"", "").replace("'", "")
         if (dateStr.isBlank()) return null
 
-        for (format in isoFormats) {
-            try {
-                return format.parse(dateStr)
-            } catch (_: Exception) {
-            }
-        }
+        // 1. 尝试使用 java.time 进行精准 ISO-8601 解析（支持时区 +08:00、Z、毫秒等）
+        try {
+            val odt = OffsetDateTime.parse(dateStr)
+            return Date(odt.toInstant().toEpochMilli())
+        } catch (_: Exception) {}
+
+        try {
+            val zdt = ZonedDateTime.parse(dateStr)
+            return Date(zdt.toInstant().toEpochMilli())
+        } catch (_: Exception) {}
+
+        try {
+            val instant = Instant.parse(dateStr)
+            return Date(instant.toEpochMilli())
+        } catch (_: Exception) {}
+
+        try {
+            val ldt = LocalDateTime.parse(dateStr)
+            return Date(ldt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
+        } catch (_: Exception) {}
+
+        try {
+            val ld = LocalDate.parse(dateStr)
+            return Date(ld.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())
+        } catch (_: Exception) {}
+
+        // 2. 尝试多种 SimpleDateFormat 格式
         for (format in extraFormats) {
             try {
                 return format.parse(dateStr)
-            } catch (_: Exception) {
-            }
+            } catch (_: Exception) {}
         }
+
+        // 3. 尝试默认 Date.toString 格式
         try {
             return defaultDateStringFormat.parse(dateStr)
-        } catch (_: Exception) {
+        } catch (_: Exception) {}
+
+        return null
+    }
+
+    /**
+     * 从文本（如文件名 "2026-05-01 腾讯会议.md" 或笔记标题）中提取日期字符串
+     * Extract date string from text (e.g. filename or title)
+     */
+    fun extractDateFromText(text: String): String? {
+        val matcher = dateRegex.matcher(text)
+        if (matcher.find()) {
+            return matcher.group(1)?.replace('/', '-')?.replace('.', '-')
         }
         return null
     }
+
+    /**
+     * 将纯时间字符串（如 "20:45" 或 "20:45:00"）与基准日期组合
+     * Combine pure time string (e.g. "20:45") with a base date
+     */
+    fun combineDateAndTime(baseDate: Date, timeStr: String): Date? {
+        val trimmed = timeStr.trim().replace("\"", "").replace("'", "")
+        val matcher = timeRegex.matcher(trimmed)
+        if (!matcher.find()) return null
+
+        val matchedTime = matcher.group(1) ?: return null
+        val parts = matchedTime.split(":")
+        if (parts.size < 2) return null
+
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        val second = if (parts.size >= 3) parts[2].toIntOrNull() ?: 0 else 0
+
+        val cal = Calendar.getInstance().apply {
+            time = baseDate
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, second)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return cal.time
+    }
+
+    /**
+     * 判断字符串是否包含时间段（如 "20:45 - 22:45" 或 "20:45~22:45"）并拆分
+     * Check if string contains a time range and split into start and end time
+     */
+    fun splitTimeRange(raw: String): Pair<String, String?> {
+        val trimmed = raw.trim().replace("\"", "").replace("'", "")
+        val delimiters = arrayOf(" - ", "-", " ~ ", "~", " – ", "—")
+        for (delim in delimiters) {
+            if (trimmed.contains(delim)) {
+                val parts = trimmed.split(delim, limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
+                    return Pair(parts[0].trim(), parts[1].trim())
+                }
+            }
+        }
+        return Pair(trimmed, null)
+    }
+
 
     fun formatDate(date: Date): String = dayFormat.format(date)
     fun formatTime(date: Date): String = timeFormat.format(date)

@@ -4,6 +4,10 @@ import org.yaml.snakeyaml.Yaml
 import java.io.BufferedReader
 import java.io.InputStream
 import java.io.InputStreamReader
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * 极速 Frontmatter 提取引擎
@@ -81,7 +85,18 @@ object FrontmatterScanner {
             val loaded = yaml.load<Any>(yamlContent)
             if (loaded is Map<*, *>) {
                 loaded.entries.associate { (k, v) ->
-                    k.toString() to (v ?: "")
+                    val finalVal: Any = if (v is Date) {
+                        // SnakeYAML 规范默认将无时区的时间戳强制按 UTC 零时区解析，
+                        // 但 Obsidian 用户笔记中记录的全部为本地设备时间 (如 10:00:00 代表上午10点而非UTC上午10点)。
+                        // 此处将其还原为无时区原始时间字符串，交由系统按本地时区解析，彻底消除 8 小时时差 (避免 10:00 变成 18:00)。
+                        val utcFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+                            timeZone = TimeZone.getTimeZone("UTC")
+                        }
+                        utcFormat.format(v)
+                    } else {
+                        v ?: ""
+                    }
+                    k.toString() to finalVal
                 }
             } else {
                 parseFrontmatterFallback(yamlContent)

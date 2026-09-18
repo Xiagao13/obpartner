@@ -13,6 +13,8 @@ import com.obpartner.app.model.TaskItem
 import com.obpartner.app.parser.FrontmatterScanner
 import com.obpartner.app.parser.MarkdownEventScanner
 import com.obpartner.app.parser.MarkdownTaskScanner
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -30,13 +32,13 @@ class StorageManager(private val context: Context) {
 
     companion object {
         @Volatile
-        private var cachedEvents: List<CalendarEvent>? = null
+        var cachedEvents: List<CalendarEvent>? = null
         @Volatile
-        private var cachedTasks: List<TaskItem>? = null
+        var cachedTasks: List<TaskItem>? = null
         @Volatile
-        private var cachedHabits: List<HabitItem>? = null
+        var cachedHabits: List<HabitItem>? = null
         @Volatile
-        private var lastScanTimestamp: Long = 0L
+        var lastScanTimestamp: Long = 0L
         private const val CACHE_VALIDITY_MS = 5 * 60 * 1000L // 5分钟内存缓存 / 5 minutes cache validity
 
         fun invalidateCache() {
@@ -60,6 +62,96 @@ class StorageManager(private val context: Context) {
 
     var lastScanSummary: String = ""
         private set
+
+    /**
+     * 将解析出的日程快照持久化到磁盘，保障桌面微件冷启动毫秒级渲染
+     * Save parsed events snapshot to disk cache for millisecond widget cold start
+     */
+    private fun saveDiskSnapshot(events: List<CalendarEvent>) {
+        try {
+            val arr = JSONArray()
+            for (ev in events.take(300)) {
+                val obj = JSONObject().apply {
+                    put("id", ev.id)
+                    put("title", ev.title)
+                    put("path", ev.path)
+                    put("start", ev.start)
+                    put("end", ev.end)
+                    put("isAllDay", ev.isAllDay)
+                    put("isCrossDay", ev.isCrossDay)
+                    put("colorValue", ev.colorValue)
+                    put("displayText", ev.displayText)
+                    if (ev.extraData.isNotEmpty()) {
+                        val extraJson = JSONObject()
+                        for ((k, v) in ev.extraData) {
+                            extraJson.put(k, v.toString())
+                        }
+                        put("extraData", extraJson)
+                    }
+                }
+                arr.put(obj)
+            }
+            prefs.edit().putString("disk_cache_events", arr.toString()).commit()
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * 从磁盘快照读取持久化缓存
+     * Load persisted events snapshot from disk
+     */
+    private fun loadDiskSnapshot(): List<CalendarEvent> {
+        try {
+            val raw = prefs.getString("disk_cache_events", null) ?: return emptyList()
+            val arr = JSONArray(raw)
+            val list = mutableListOf<CalendarEvent>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val extraMap = mutableMapOf<String, Any>()
+                if (obj.has("extraData")) {
+                    val extraObj = obj.getJSONObject("extraData")
+                    val keys = extraObj.keys()
+                    while (keys.hasNext()) {
+                        val k = keys.next()
+                        extraMap[k] = extraObj.optString(k)
+                    }
+                }
+                list.add(
+                    CalendarEvent(
+                        id = obj.optString("id"),
+                        title = obj.optString("title"),
+                        path = obj.optString("path"),
+                        start = obj.optLong("start"),
+                        end = obj.optLong("end"),
+                        isAllDay = obj.optBoolean("isAllDay", false),
+                        isCrossDay = obj.optBoolean("isCrossDay", false),
+                        colorValue = obj.optString("colorValue", "default"),
+                        displayText = obj.optString("displayText", ""),
+                        extraData = extraMap
+                    )
+                )
+            }
+            return list
+        } catch (_: Exception) {
+            return emptyList()
+        }
+    }
+
+    /**
+     * 极速获取缓存数据（微秒级），供桌面微件首帧直接渲染，绝不阻塞主线程，彻底消除无响应与等待
+     * Fast retrieve cached events (<1ms), for immediate widget rendering without any UI freeze
+     */
+    fun getCachedVaultFast(): List<CalendarEvent> {
+        val mem = cachedEvents
+        if (mem != null) {
+            return mem
+        }
+        val disk = loadDiskSnapshot()
+        if (disk.isNotEmpty()) {
+            cachedEvents = disk
+            return disk
+        }
+        return emptyList()
+    }
 
     fun getSettings(): AppSettings {
         return AppSettings(
@@ -100,8 +192,8 @@ class StorageManager(private val context: Context) {
     }
 
     /**
-     * 获取缓存的日程与待办数据 (微秒级即时响应，彻底解决桌面小部件卡顿与延迟)
-     * Get cached vault data (<10ms instant response, completely solves widget lag)
+     * 获取缓存的日程与待办数据
+     * Get cached vault data
      */
     fun getCachedVault(forceRefresh: Boolean = false): Triple<List<CalendarEvent>, List<TaskItem>, List<HabitItem>> {
         val now = System.currentTimeMillis()
@@ -137,13 +229,12 @@ class StorageManager(private val context: Context) {
         }
         val todayMidnight = cal.timeInMillis
 
-        // 若用户未指定路径，自动尝试扫描安卓手机常见 Obsidian 笔记目录
+        // 若用户未指定路径，自动尝试扫描安卓手机常见 Obsidian 笔记目录 (坚决不扫描 Documents 根目录以绝后患)
         val folders = if (pathStr.isNotBlank()) {
             pathStr.split(",").map { it.trim().removeSuffix("/") }.filter { it.isNotEmpty() }
         } else {
             listOf(
                 "/storage/emulated/0/Documents/Obsidian",
-                "/storage/emulated/0/Documents",
                 "/storage/emulated/0/Obsidian",
                 "/sdcard/Documents/Obsidian",
                 "/sdcard/Obsidian"
@@ -206,11 +297,12 @@ class StorageManager(private val context: Context) {
         val distinctTasks = tasks.distinctBy { it.id }
         val distinctHabits = habits.distinctBy { it.id }
 
-        // 更新内存缓存
+        // 更新内存缓存与磁盘持久化快照
         cachedEvents = distinctEvents
         cachedTasks = distinctTasks
         cachedHabits = distinctHabits
         lastScanTimestamp = System.currentTimeMillis()
+        saveDiskSnapshot(distinctEvents)
 
         lastScanSummary = "扫描完成：共扫描 $scannedFilesCount 个文件，解析出 ${distinctEvents.size} 个日程，${distinctTasks.size} 个待办，${distinctHabits.size} 个习惯"
 

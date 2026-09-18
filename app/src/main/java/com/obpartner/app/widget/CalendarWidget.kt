@@ -34,6 +34,7 @@ import com.obpartner.app.data.StorageManager
 import com.obpartner.app.model.CalendarEvent
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlinx.coroutines.*
 
 /**
  * 桌面日历微件交互回调 (支持翻周翻月、重置今天、周/月视图切换与日期筛选)
@@ -53,23 +54,25 @@ class CalendarNavActionCallback : ActionCallback {
 
         when (action) {
             "nav_prev" -> {
-                val currentMode = prefs.getString("${idStr}_view_mode", "week") ?: "week"
+                val currentMode = prefs.getString("${idStr}_view_mode", null)
+                    ?: prefs.getString("global_calendar_view_mode", "week") ?: "week"
                 if (currentMode == "month") {
                     val current = prefs.getInt("${idStr}_month_offset", 0)
-                    prefs.edit().putInt("${idStr}_month_offset", current - 1).apply()
+                    prefs.edit().putInt("${idStr}_month_offset", current - 1).commit()
                 } else {
                     val current = prefs.getInt("${idStr}_week_offset", 0)
-                    prefs.edit().putInt("${idStr}_week_offset", current - 1).apply()
+                    prefs.edit().putInt("${idStr}_week_offset", current - 1).commit()
                 }
             }
             "nav_next" -> {
-                val currentMode = prefs.getString("${idStr}_view_mode", "week") ?: "week"
+                val currentMode = prefs.getString("${idStr}_view_mode", null)
+                    ?: prefs.getString("global_calendar_view_mode", "week") ?: "week"
                 if (currentMode == "month") {
                     val current = prefs.getInt("${idStr}_month_offset", 0)
-                    prefs.edit().putInt("${idStr}_month_offset", current + 1).apply()
+                    prefs.edit().putInt("${idStr}_month_offset", current + 1).commit()
                 } else {
                     val current = prefs.getInt("${idStr}_week_offset", 0)
-                    prefs.edit().putInt("${idStr}_week_offset", current + 1).apply()
+                    prefs.edit().putInt("${idStr}_week_offset", current + 1).commit()
                 }
             }
             "reset_today" -> {
@@ -77,26 +80,39 @@ class CalendarNavActionCallback : ActionCallback {
                     .putInt("${idStr}_week_offset", 0)
                     .putInt("${idStr}_month_offset", 0)
                     .remove("${idStr}_selected_day")
-                    .apply()
+                    .commit()
             }
             "set_view" -> {
                 val mode = parameters[viewModeKey] ?: "week"
-                prefs.edit().putString("${idStr}_view_mode", mode).apply()
+                prefs.edit()
+                    .putString("${idStr}_view_mode", mode)
+                    .putString("global_calendar_view_mode", mode)
+                    .remove("${idStr}_selected_day")
+                    .commit()
             }
             "select_day" -> {
                 val timestamp = parameters[dateTimestampKey] ?: 0L
                 if (timestamp > 0L) {
-                    prefs.edit().putLong("${idStr}_selected_day", timestamp).apply()
+                    prefs.edit().putLong("${idStr}_selected_day", timestamp).commit()
                 } else {
-                    prefs.edit().remove("${idStr}_selected_day").apply()
+                    prefs.edit().remove("${idStr}_selected_day").commit()
                 }
             }
         }
 
-        // 刷新微件
+        // 立即刷新相关微件
         try { CalendarWidget2x3().update(context, glanceId) } catch (_: Exception) {}
         try { CalendarWidget3x2().update(context, glanceId) } catch (_: Exception) {}
         try { CalendarWidget2x2().update(context, glanceId) } catch (_: Exception) {}
+        try {
+            val manager = androidx.glance.appwidget.GlanceAppWidgetManager(context)
+            manager.getGlanceIds(CalendarWidget2x3::class.java).forEach {
+                try { CalendarWidget2x3().update(context, it) } catch (_: Exception) {}
+            }
+            manager.getGlanceIds(CalendarWidget3x2::class.java).forEach {
+                try { CalendarWidget3x2().update(context, it) } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
     }
 }
 
@@ -153,42 +169,57 @@ object CalendarWidgetShared {
         ) {
             if (showNavButtons) {
                 // 上一周 / 上一月
-                Text(
-                    text = "◀",
-                    style = TextStyle(color = ColorProvider(theme.subText), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                Box(
                     modifier = GlanceModifier
-                        .padding(horizontal = 3.dp, vertical = 2.dp)
+                        .padding(horizontal = 2.dp)
                         .clickable(
                             actionRunCallback<CalendarNavActionCallback>(
                                 actionParametersOf(CalendarNavActionCallback.actionKey to "nav_prev")
                             )
-                        )
-                )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "◀",
+                        style = TextStyle(color = ColorProvider(theme.subText), fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                        modifier = GlanceModifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
                 // 回到今天
-                Text(
-                    text = "今",
-                    style = TextStyle(color = ColorProvider(theme.accent), fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                Box(
                     modifier = GlanceModifier
-                        .padding(horizontal = 3.dp, vertical = 2.dp)
+                        .padding(horizontal = 2.dp)
                         .clickable(
                             actionRunCallback<CalendarNavActionCallback>(
                                 actionParametersOf(CalendarNavActionCallback.actionKey to "reset_today")
                             )
-                        )
-                )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "今",
+                        style = TextStyle(color = ColorProvider(theme.accent), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                        modifier = GlanceModifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
                 // 下一周 / 下一月
-                Text(
-                    text = "▶",
-                    style = TextStyle(color = ColorProvider(theme.subText), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                Box(
                     modifier = GlanceModifier
-                        .padding(horizontal = 3.dp, vertical = 2.dp)
+                        .padding(horizontal = 2.dp)
                         .clickable(
                             actionRunCallback<CalendarNavActionCallback>(
                                 actionParametersOf(CalendarNavActionCallback.actionKey to "nav_next")
                             )
-                        )
-                )
-                Spacer(modifier = GlanceModifier.width(3.dp))
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "▶",
+                        style = TextStyle(color = ColorProvider(theme.subText), fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                        modifier = GlanceModifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+                Spacer(modifier = GlanceModifier.width(4.dp))
             }
 
             Column(modifier = GlanceModifier.defaultWeight()) {
@@ -214,25 +245,19 @@ object CalendarWidgetShared {
             }
 
             if (showViewSwitcher) {
-                // 周 / 月 视图切换胶囊
+                // 周 / 月 视图切换胶囊 (加大触控热区与视觉包裹，确保100%命中率)
                 Row(
                     modifier = GlanceModifier
                         .background(theme.cardBg)
-                        .cornerRadius(4.dp)
-                        .padding(1.dp),
+                        .cornerRadius(6.dp)
+                        .padding(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "周",
-                        style = TextStyle(
-                            color = ColorProvider(if (viewMode == "week") Color.White else theme.subText),
-                            fontSize = 9.sp,
-                            fontWeight = if (viewMode == "week") FontWeight.Bold else FontWeight.Normal
-                        ),
+                    Box(
                         modifier = GlanceModifier
                             .background(if (viewMode == "week") theme.accent else Color.Transparent)
-                            .cornerRadius(3.dp)
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .cornerRadius(4.dp)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                             .clickable(
                                 actionRunCallback<CalendarNavActionCallback>(
                                     actionParametersOf(
@@ -240,19 +265,24 @@ object CalendarWidgetShared {
                                         CalendarNavActionCallback.viewModeKey to "week"
                                     )
                                 )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "周",
+                            style = TextStyle(
+                                color = ColorProvider(if (viewMode == "week") Color.White else theme.subText),
+                                fontSize = 11.sp,
+                                fontWeight = if (viewMode == "week") FontWeight.Bold else FontWeight.Normal
                             )
-                    )
-                    Text(
-                        text = "月",
-                        style = TextStyle(
-                            color = ColorProvider(if (viewMode == "month") Color.White else theme.subText),
-                            fontSize = 9.sp,
-                            fontWeight = if (viewMode == "month") FontWeight.Bold else FontWeight.Normal
-                        ),
+                        )
+                    }
+
+                    Box(
                         modifier = GlanceModifier
                             .background(if (viewMode == "month") theme.accent else Color.Transparent)
-                            .cornerRadius(3.dp)
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .cornerRadius(4.dp)
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
                             .clickable(
                                 actionRunCallback<CalendarNavActionCallback>(
                                     actionParametersOf(
@@ -260,21 +290,38 @@ object CalendarWidgetShared {
                                         CalendarNavActionCallback.viewModeKey to "month"
                                     )
                                 )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "月",
+                            style = TextStyle(
+                                color = ColorProvider(if (viewMode == "month") Color.White else theme.subText),
+                                fontSize = 11.sp,
+                                fontWeight = if (viewMode == "month") FontWeight.Bold else FontWeight.Normal
                             )
-                    )
+                        )
+                    }
                 }
                 Spacer(modifier = GlanceModifier.width(4.dp))
             }
 
-            Text(
-                text = "↗",
-                style = TextStyle(
-                    color = ColorProvider(theme.accent),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                modifier = GlanceModifier.clickable(actionStartActivity(onOpenAppIntent))
-            )
+            Box(
+                modifier = GlanceModifier
+                    .padding(horizontal = 2.dp)
+                    .clickable(actionStartActivity(onOpenAppIntent)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "↗",
+                    style = TextStyle(
+                        color = ColorProvider(theme.accent),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    modifier = GlanceModifier.padding(horizontal = 3.dp, vertical = 2.dp)
+                )
+            }
         }
     }
 
@@ -371,7 +418,7 @@ object CalendarWidgetShared {
     }
 
     /**
-     * 7×6 完整月历网格视图 (含星期列头、42格日期、今日高亮与日程打点)
+     * 7×6 完整月历网格视图 (含星期列头、42格日期、今日高亮与日程打点，单节点拍扁防 Binder 限制)
      * 7x6 Full Month Grid View
      */
     @Composable
@@ -422,7 +469,7 @@ object CalendarWidgetShared {
                                     .defaultWeight()
                                     .background(cellBg)
                                     .cornerRadius(3.dp)
-                                    .padding(vertical = 1.dp)
+                                    .padding(vertical = 2.dp)
                                     .clickable(
                                         actionRunCallback<CalendarNavActionCallback>(
                                             actionParametersOf(
@@ -433,24 +480,14 @@ object CalendarWidgetShared {
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = dayFmt.format(cell.date),
-                                        style = TextStyle(
-                                            color = ColorProvider(textColor),
-                                            fontSize = 9.sp,
-                                            fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal
-                                        )
+                                Text(
+                                    text = if (hasEvents) "${dayFmt.format(cell.date)}•" else dayFmt.format(cell.date),
+                                    style = TextStyle(
+                                        color = ColorProvider(if (hasEvents && !isToday && !isSelected) theme.highlight else textColor),
+                                        fontSize = 9.sp,
+                                        fontWeight = if (isToday || isSelected) FontWeight.Bold else FontWeight.Normal
                                     )
-                                    if (hasEvents) {
-                                        Box(
-                                            modifier = GlanceModifier
-                                                .size(3.dp)
-                                                .background(if (isSelected) Color.White else theme.highlight)
-                                                .cornerRadius(1.5.dp)
-                                        ) {}
-                                    }
-                                }
+                                )
                             }
                         }
                     }
@@ -564,15 +601,30 @@ class CalendarWidget2x3 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (events, _, _) = storageManager.getCachedVault()
+        // 1. 毫秒级直接读取磁盘/内存持久化快照，0ms 呈现首帧，彻底消灭 Launcher ANR 和无响应
+        val events = storageManager.getCachedVaultFast()
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()
 
-        // 读取持久化交互状态 (当前周/月偏移量、当前视图模式、选中日期)
+        // 2. 检查是否需要后台异步静默刷新（如果数据为空，或者距离上次全盘扫描超过 5 分钟）
+        val now = System.currentTimeMillis()
+        if (events.isEmpty() || (now - StorageManager.lastScanTimestamp > 5 * 60 * 1000L)) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val (freshEvents, _, _) = storageManager.scanVault()
+                    if (freshEvents.size != events.size || freshEvents.map { it.id } != events.map { it.id }) {
+                        this@CalendarWidget2x3.update(context, id)
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        // 读取持久化交互状态 (支持全局兜底与实例绑定)
         val prefs = context.getSharedPreferences("widget_calendar_state", Context.MODE_PRIVATE)
         val idStr = id.toString()
-        val viewMode = prefs.getString("${idStr}_view_mode", "week") ?: "week"
+        val viewMode = prefs.getString("${idStr}_view_mode", null)
+            ?: prefs.getString("global_calendar_view_mode", "week") ?: "week"
         val weekOffset = prefs.getInt("${idStr}_week_offset", 0)
         val monthOffset = prefs.getInt("${idStr}_month_offset", 0)
         val selectedDayTs = prefs.getLong("${idStr}_selected_day", 0L)
@@ -606,6 +658,23 @@ class CalendarWidget2x3 : GlanceAppWidget() {
             add(Calendar.MONTH, monthOffset)
         }
         val monthCells = CalendarUtils.generateMonthCells(targetMonthCal.time, settings.weekStartsOn)
+        val monthStartTs = Calendar.getInstance().apply {
+            time = targetMonthCal.time
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val monthEndTs = Calendar.getInstance().apply {
+            time = targetMonthCal.time
+            set(Calendar.DAY_OF_MONTH, targetMonthCal.getActualMaximum(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+        val monthEventsCount = events.count { it.start in monthStartTs..monthEndTs }
 
         // 本周内所有日程
         val weekEvents = events.filter { it.start in weekStartTs..weekEndTs }.sortedBy { it.start }
@@ -625,7 +694,7 @@ class CalendarWidget2x3 : GlanceAppWidget() {
                 // 1. 顶栏：支持 ◀ 今 ▶ 翻周/翻月与 [周] [月] 视图切换
                 CalendarWidgetShared.NavHeader(
                     title = if (viewMode == "month") monthTitle else weekTitle,
-                    subTitle = if (viewMode == "month") "共 ${events.filter { CalendarUtils.isSameDay(Date(it.start), targetMonthCal.time) }.size} 项日程" else "本周共 ${weekEvents.size} 项日程",
+                    subTitle = if (viewMode == "month") "当月共 ${monthEventsCount} 项日程" else "本周共 ${weekEvents.size} 项日程",
                     viewMode = viewMode,
                     theme = theme,
                     onOpenAppIntent = mainIntent,
@@ -774,25 +843,43 @@ class CalendarWidget2x3 : GlanceAppWidget() {
 }
 
 /**
- * 桌面日历微件 2 (日历·今日看板 - 3×2 横版，左侧公历农历大看板与快捷控制，右侧日程流)
- * 3x2 Calendar Widget (Horizontal layout with today dashboard and schedule flow)
+ * 桌面日历微件 2 (日历·今日看板 - 3×2 横版，左侧公历农历大看板与快捷控制，右侧日程流，支持周/月视图无缝切换)
+ * 3x2 Calendar Widget (Horizontal layout with today dashboard and schedule flow, supports week/month view toggle)
  */
 class CalendarWidget3x2 : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Single
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (events, _, _) = storageManager.getCachedVault()
+        // 1. 毫秒级直接读取磁盘/内存持久化快照，0ms 呈现首帧，彻底消灭 Launcher ANR 和无响应
+        val events = storageManager.getCachedVaultFast()
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()
         val lunar = LunarHelper.getLunarDetails(today)
 
+        // 2. 检查是否需要后台异步静默刷新（如果数据为空，或者距离上次全盘扫描超过 5 分钟）
+        val now = System.currentTimeMillis()
+        if (events.isEmpty() || (now - StorageManager.lastScanTimestamp > 5 * 60 * 1000L)) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val (freshEvents, _, _) = storageManager.scanVault()
+                    if (freshEvents.size != events.size || freshEvents.map { it.id } != events.map { it.id }) {
+                        this@CalendarWidget3x2.update(context, id)
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
+        // 读取持久化交互状态 (支持全局兜底与实例绑定)
         val prefs = context.getSharedPreferences("widget_calendar_state", Context.MODE_PRIVATE)
         val idStr = id.toString()
-        val viewMode = prefs.getString("${idStr}_view_mode", "week") ?: "week"
+        val viewMode = prefs.getString("${idStr}_view_mode", null)
+            ?: prefs.getString("global_calendar_view_mode", "week") ?: "week"
         val weekOffset = prefs.getInt("${idStr}_week_offset", 0)
+        val monthOffset = prefs.getInt("${idStr}_month_offset", 0)
 
+        // 目标周与日期范围
         val targetWeekCal = Calendar.getInstance().apply {
             time = today
             add(Calendar.WEEK_OF_YEAR, weekOffset)
@@ -813,131 +900,265 @@ class CalendarWidget3x2 : GlanceAppWidget() {
             set(Calendar.MILLISECOND, 999)
         }.timeInMillis
 
+        // 目标月份与日程
+        val targetMonthCal = Calendar.getInstance().apply {
+            time = today
+            set(Calendar.DAY_OF_MONTH, 1)
+            add(Calendar.MONTH, monthOffset)
+        }
+        val monthStartTs = Calendar.getInstance().apply {
+            time = targetMonthCal.time
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val monthEndTs = Calendar.getInstance().apply {
+            time = targetMonthCal.time
+            set(Calendar.DAY_OF_MONTH, targetMonthCal.getActualMaximum(Calendar.DAY_OF_MONTH))
+            set(Calendar.HOUR_OF_DAY, 23)
+            set(Calendar.MINUTE, 59)
+            set(Calendar.SECOND, 59)
+            set(Calendar.MILLISECOND, 999)
+        }.timeInMillis
+
         val weekEvents = events.filter { it.start in weekStartTs..weekEndTs }.sortedBy { it.start }
         val todayEvents = events.filter { CalendarUtils.isSameDay(Date(it.start), today) }
+        val monthEvents = events.filter { it.start in monthStartTs..monthEndTs }.sortedBy { it.start }
 
         provideContent {
-            val dayNumStr = SimpleDateFormat("d", Locale.getDefault()).format(today)
-            val monthWeekStr = SimpleDateFormat("M月 EEEE", Locale.CHINESE).format(today)
             val mainIntent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
 
             CalendarWidgetShared.GlassContainer(theme = theme) {
-                Row(
-                    modifier = GlanceModifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 左侧大号日期看板与翻周控制
-                    Column(
-                        modifier = GlanceModifier
-                            .width(88.dp)
-                            .fillMaxHeight(),
+                Column(modifier = GlanceModifier.fillMaxSize()) {
+                    // 1. 顶栏：◀ 今 ▶ 控制器 + 标题 + 周/月切换胶囊 + ↗ 按钮
+                    Row(
+                        modifier = GlanceModifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = dayNumStr,
-                            style = TextStyle(
-                                color = ColorProvider(theme.dateNumText),
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                        Text(
-                            text = monthWeekStr,
-                            style = TextStyle(
-                                color = ColorProvider(theme.subText),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        )
-                        Text(
-                            text = "${lunar.text} ${if (lunar.holidayStatus == "work") "(班)" else if (lunar.holidayStatus == "holiday") "(休)" else ""}",
-                            style = TextStyle(
-                                color = ColorProvider(if (lunar.holidayStatus == "holiday") Color(0xFFFF5252) else theme.subText),
-                                fontSize = 9.sp
-                            )
-                        )
-                        Spacer(modifier = GlanceModifier.defaultWeight())
-
-                        // 快速翻周按钮
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = GlanceModifier.clickable(
+                                actionRunCallback<CalendarNavActionCallback>(
+                                    actionParametersOf(CalendarNavActionCallback.actionKey to "nav_prev")
+                                )
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
                                 text = "◀",
-                                style = TextStyle(color = ColorProvider(theme.subText), fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                modifier = GlanceModifier.padding(horizontal = 3.dp).clickable(
-                                    actionRunCallback<CalendarNavActionCallback>(
-                                        actionParametersOf(CalendarNavActionCallback.actionKey to "nav_prev")
-                                    )
-                                )
+                                style = TextStyle(color = ColorProvider(theme.subText), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                                modifier = GlanceModifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
+                        }
+                        Box(
+                            modifier = GlanceModifier.clickable(
+                                actionRunCallback<CalendarNavActionCallback>(
+                                    actionParametersOf(CalendarNavActionCallback.actionKey to "reset_today")
+                                )
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
                                 text = "今",
-                                style = TextStyle(color = ColorProvider(theme.accent), fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                                modifier = GlanceModifier.padding(horizontal = 3.dp).clickable(
-                                    actionRunCallback<CalendarNavActionCallback>(
-                                        actionParametersOf(CalendarNavActionCallback.actionKey to "reset_today")
-                                    )
-                                )
+                                style = TextStyle(color = ColorProvider(theme.accent), fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                                modifier = GlanceModifier.padding(horizontal = 4.dp, vertical = 2.dp)
                             )
+                        }
+                        Box(
+                            modifier = GlanceModifier.clickable(
+                                actionRunCallback<CalendarNavActionCallback>(
+                                    actionParametersOf(CalendarNavActionCallback.actionKey to "nav_next")
+                                )
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Text(
                                 text = "▶",
-                                style = TextStyle(color = ColorProvider(theme.subText), fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                modifier = GlanceModifier.padding(horizontal = 3.dp).clickable(
-                                    actionRunCallback<CalendarNavActionCallback>(
-                                        actionParametersOf(CalendarNavActionCallback.actionKey to "nav_next")
+                                style = TextStyle(color = ColorProvider(theme.subText), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                                modifier = GlanceModifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        Spacer(modifier = GlanceModifier.width(4.dp))
+
+                        val headerTitle = if (viewMode == "month") {
+                            SimpleDateFormat("yyyy年 M月", Locale.CHINESE).format(targetMonthCal.time)
+                        } else {
+                            if (weekOffset == 0) "本周 (${SimpleDateFormat("M.d", Locale.getDefault()).format(weekDates.first())}-${SimpleDateFormat("M.d", Locale.getDefault()).format(weekDates.last())})"
+                            else "${SimpleDateFormat("M.d", Locale.getDefault()).format(weekDates.first())}-${SimpleDateFormat("M.d", Locale.getDefault()).format(weekDates.last())} (${if (weekOffset > 0) "+${weekOffset}周" else "${weekOffset}周"})"
+                        }
+                        Text(
+                            text = headerTitle,
+                            style = TextStyle(color = ColorProvider(theme.headerText), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                            modifier = GlanceModifier.defaultWeight(),
+                            maxLines = 1
+                        )
+
+                        // 周 / 月 视图切换胶囊 (舒适大热区包裹)
+                        Row(
+                            modifier = GlanceModifier
+                                .background(theme.cardBg)
+                                .cornerRadius(6.dp)
+                                .padding(2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = GlanceModifier
+                                    .background(if (viewMode == "week") theme.accent else Color.Transparent)
+                                    .cornerRadius(4.dp)
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    .clickable(
+                                        actionRunCallback<CalendarNavActionCallback>(
+                                            actionParametersOf(
+                                                CalendarNavActionCallback.actionKey to "set_view",
+                                                CalendarNavActionCallback.viewModeKey to "week"
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "周",
+                                    style = TextStyle(
+                                        color = ColorProvider(if (viewMode == "week") Color.White else theme.subText),
+                                        fontSize = 10.sp,
+                                        fontWeight = if (viewMode == "week") FontWeight.Bold else FontWeight.Normal
                                     )
                                 )
+                            }
+                            Box(
+                                modifier = GlanceModifier
+                                    .background(if (viewMode == "month") theme.accent else Color.Transparent)
+                                    .cornerRadius(4.dp)
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    .clickable(
+                                        actionRunCallback<CalendarNavActionCallback>(
+                                            actionParametersOf(
+                                                CalendarNavActionCallback.actionKey to "set_view",
+                                                CalendarNavActionCallback.viewModeKey to "month"
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "月",
+                                    style = TextStyle(
+                                        color = ColorProvider(if (viewMode == "month") Color.White else theme.subText),
+                                        fontSize = 10.sp,
+                                        fontWeight = if (viewMode == "month") FontWeight.Bold else FontWeight.Normal
+                                    )
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = GlanceModifier.width(4.dp))
+
+                        Box(
+                            modifier = GlanceModifier.clickable(actionStartActivity(mainIntent)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "↗",
+                                style = TextStyle(color = ColorProvider(theme.accent), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                                modifier = GlanceModifier.padding(horizontal = 3.dp, vertical = 2.dp)
                             )
                         }
                     }
 
-                    // 纵向毛玻璃分隔线
-                    Box(
-                        modifier = GlanceModifier
-                            .width(1.dp)
-                            .fillMaxHeight()
-                            .background(theme.dividerColor)
-                    ) {}
+                    Spacer(modifier = GlanceModifier.height(4.dp))
 
-                    Spacer(modifier = GlanceModifier.width(6.dp))
-
-                    // 右侧本周/今日日程内容列表
-                    Column(
-                        modifier = GlanceModifier
-                            .defaultWeight()
-                            .fillMaxHeight()
+                    // 2. 主体区：左右分栏
+                    Row(
+                        modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = if (weekOffset == 0) "今日 (${todayEvents.size}) / 本周 (${weekEvents.size})" else "该周日程 (${weekEvents.size})",
-                                style = TextStyle(color = ColorProvider(theme.highlight), fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                modifier = GlanceModifier.defaultWeight()
-                            )
-                            Text(
-                                text = "日历 ↗",
-                                style = TextStyle(color = ColorProvider(theme.accent), fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                modifier = GlanceModifier.clickable(actionStartActivity(mainIntent))
-                            )
-                        }
-                        Spacer(modifier = GlanceModifier.height(2.dp))
-
-                        val displayList = if (weekOffset == 0 && todayEvents.isNotEmpty()) todayEvents else weekEvents
-                        if (displayList.isEmpty()) {
-                            Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        // 左侧信息面板
+                        Column(
+                            modifier = GlanceModifier.width(86.dp).fillMaxHeight(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (viewMode == "month") {
+                                val monthStr = SimpleDateFormat("M月", Locale.CHINESE).format(targetMonthCal.time)
+                                val yearStr = SimpleDateFormat("yyyy", Locale.getDefault()).format(targetMonthCal.time)
                                 Text(
-                                    text = if (events.isEmpty()) "暂无扫描到日程" else "当前无日程安排 🎉",
-                                    style = TextStyle(color = ColorProvider(theme.subText), fontSize = 11.sp)
+                                    text = monthStr,
+                                    style = TextStyle(color = ColorProvider(theme.dateNumText), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                                )
+                                Text(
+                                    text = yearStr,
+                                    style = TextStyle(color = ColorProvider(theme.subText), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                )
+                                Spacer(modifier = GlanceModifier.height(4.dp))
+                                Text(
+                                    text = "全月 ${monthEvents.size} 项日程",
+                                    style = TextStyle(color = ColorProvider(theme.highlight), fontSize = 9.sp)
+                                )
+                            } else {
+                                val dayNumStr = SimpleDateFormat("d", Locale.getDefault()).format(today)
+                                val monthWeekStr = SimpleDateFormat("M月 EEEE", Locale.CHINESE).format(today)
+                                Text(
+                                    text = dayNumStr,
+                                    style = TextStyle(color = ColorProvider(theme.dateNumText), fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                                )
+                                Text(
+                                    text = monthWeekStr,
+                                    style = TextStyle(color = ColorProvider(theme.subText), fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                )
+                                Text(
+                                    text = "${lunar.text} ${if (lunar.holidayStatus == "work") "(班)" else if (lunar.holidayStatus == "holiday") "(休)" else ""}",
+                                    style = TextStyle(
+                                        color = ColorProvider(if (lunar.holidayStatus == "holiday") Color(0xFFFF5252) else theme.subText),
+                                        fontSize = 8.sp
+                                    )
+                                )
+                                Spacer(modifier = GlanceModifier.height(2.dp))
+                                Text(
+                                    text = if (weekOffset == 0) "今日 ${todayEvents.size} 项" else "本周 ${weekEvents.size} 项",
+                                    style = TextStyle(color = ColorProvider(theme.highlight), fontSize = 9.sp)
                                 )
                             }
+                        }
+
+                        // 竖向分隔线
+                        Box(
+                            modifier = GlanceModifier
+                                .width(1.dp)
+                                .fillMaxHeight()
+                                .background(theme.dividerColor)
+                        ) {}
+
+                        Spacer(modifier = GlanceModifier.width(6.dp))
+
+                        // 右侧日程列表 (周日程流 或 月日程流)
+                        val displayList = if (viewMode == "month") {
+                            monthEvents
                         } else {
-                            LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                                items(displayList) { ev ->
-                                    CalendarWidgetShared.EventItemRow(
-                                        event = ev,
-                                        theme = theme,
-                                        storageManager = storageManager,
-                                        showExtraFields = false,
-                                        compact = true
+                            if (weekOffset == 0 && todayEvents.isNotEmpty()) todayEvents else weekEvents
+                        }
+
+                        Column(
+                            modifier = GlanceModifier.defaultWeight().fillMaxHeight()
+                        ) {
+                            if (displayList.isEmpty()) {
+                                Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = if (events.isEmpty()) "暂无扫描到日程" else "当前无日程安排 🎉",
+                                        style = TextStyle(color = ColorProvider(theme.subText), fontSize = 11.sp)
                                     )
+                                }
+                            } else {
+                                LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
+                                    items(displayList) { ev ->
+                                        CalendarWidgetShared.EventItemRow(
+                                            event = ev,
+                                            theme = theme,
+                                            storageManager = storageManager,
+                                            showExtraFields = false,
+                                            compact = true
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -957,11 +1178,25 @@ class CalendarWidget2x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (events, _, _) = storageManager.getCachedVault()
+        // 1. 毫秒级直接读取磁盘/内存持久化快照
+        val events = storageManager.getCachedVaultFast()
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()
         val lunar = LunarHelper.getLunarDetails(today)
+
+        // 2. 检查是否需要后台异步静默刷新
+        val now = System.currentTimeMillis()
+        if (events.isEmpty() || (now - StorageManager.lastScanTimestamp > 5 * 60 * 1000L)) {
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val (freshEvents, _, _) = storageManager.scanVault()
+                    if (freshEvents.size != events.size || freshEvents.map { it.id } != events.map { it.id }) {
+                        this@CalendarWidget2x2.update(context, id)
+                    }
+                } catch (_: Exception) {}
+            }
+        }
 
         val prefs = context.getSharedPreferences("widget_calendar_state", Context.MODE_PRIVATE)
         val idStr = id.toString()

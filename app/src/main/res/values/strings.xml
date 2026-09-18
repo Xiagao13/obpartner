@@ -1,11 +1,15 @@
 <resources>
     <string name="app_name">OBpartner</string>
-    <string name="widget_calendar_title">OBpartner 日历视图</string>
-    <string name="widget_calendar_4x2_title">OBpartner 日历 (4×2 紧凑)</string>
-    <string name="widget_calendar_4x4_title">OBpartner 日历 (4×4 大卡片)</string>
-    <string name="widget_today_tasks_title">OBpartner 今日待办</string>
-    <string name="widget_today_tasks_4x2_title">OBpartner 待办 (4×2 列表)</string>
-    <string name="widget_today_tasks_2x2_title">OBpartner 待办 (2×2 方块)</string>
+    <string name="widget_calendar_title">OBpartner 日历 (3×2 默认)</string>
+    <string name="widget_calendar_3x2_title">OBpartner 日历 (3×2 横版主推)</string>
+    <string name="widget_calendar_2x3_title">OBpartner 日历 (2×3 竖版主推)</string>
+    <string name="widget_calendar_2x2_title">OBpartner 日历 (2×2 方块精简)</string>
+    <string name="widget_calendar_4x2_title">OBpartner 日历 (4×2 宽屏兼容)</string>
+    <string name="widget_calendar_4x4_title">OBpartner 日历 (4×4 大卡片看板)</string>
+    <string name="widget_today_tasks_title">OBpartner 今日待办 (3×2 默认)</string>
+    <string name="widget_today_tasks_3x2_title">OBpartner 待办 (3×2 横版主推)</string>
+    <string name="widget_today_tasks_2x2_title">OBpartner 待办 (2×2 方块精简)</string>
+    <string name="widget_today_tasks_4x2_title">OBpartner 待办 (4×2 宽屏兼容)</string>
 
 
     <string name="tab_calendar">日历</string>

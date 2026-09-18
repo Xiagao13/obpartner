@@ -86,4 +86,84 @@ object ColorUtils {
             alpha = 1f
         )
     }
+
+    /**
+     * 获取指定名称的桌面微件主题配置 (默认提供柔光磨砂玻璃效果)
+     * Get desktop widget theme configuration by name (Default Frosted Glass)
+     */
+    fun getWidgetTheme(themeName: String?): WidgetThemeConfig {
+        return when (themeName?.lowercase()) {
+            "dark" -> WidgetThemeConfig(
+                id = "dark",
+                name = "深空暗黑",
+                widgetBg = Color(0xFF181824),
+                cardBg = Color(0xFF26273A),
+                headerText = Color(0xFFFFFFFF),
+                subText = Color(0xFFB0BEC5),
+                dateNumText = Color(0xFFFFFFFF),
+                accent = Color(0xFF9575CD),
+                highlight = Color(0xFF80CBC4),
+                glassBorder = Color(0x1AFFFFFF),
+                dividerColor = Color(0x1FFFFFFF)
+            )
+            "amoled" -> WidgetThemeConfig(
+                id = "amoled",
+                name = "纯粹极黑",
+                widgetBg = Color(0xFF000000),
+                cardBg = Color(0xFF121218),
+                headerText = Color(0xFFFFFFFF),
+                subText = Color(0xFF9E9E9E),
+                dateNumText = Color(0xFFFFFFFF),
+                accent = Color(0xFFBB86FC),
+                highlight = Color(0xFF03DAC6),
+                glassBorder = Color(0x22FFFFFF),
+                dividerColor = Color(0x22FFFFFF)
+            )
+            "light" -> WidgetThemeConfig(
+                id = "light",
+                name = "晨曦透白",
+                widgetBg = Color(0xCCF8FAFC),
+                cardBg = Color(0xE6FFFFFF),
+                headerText = Color(0xFF0F172A),
+                subText = Color(0xFF64748B),
+                dateNumText = Color(0xFF1E293B),
+                accent = Color(0xFF6366F1),
+                highlight = Color(0xFF0D9488),
+                glassBorder = Color(0x33CBD5E1),
+                dividerColor = Color(0x20000000)
+            )
+            else -> WidgetThemeConfig( // 默认 "glass"：柔光磨砂玻璃质感，透出手机桌面壁纸
+                id = "glass",
+                name = "柔光玻璃",
+                widgetBg = Color(0xB3151828), // 70% 柔光暗晶透光
+                cardBg = Color(0x4D2A2E48),   // 30% 半透明卡片
+                headerText = Color(0xFFFFFFFF),
+                subText = Color(0xFFCBD5E1),
+                dateNumText = Color(0xFFFFFFFF),
+                accent = Color(0xFF9D84F6),
+                highlight = Color(0xFF6EE7B7),
+                glassBorder = Color(0x2EFFFFFF), // 柔白高光微边框
+                dividerColor = Color(0x24FFFFFF)
+            )
+        }
+    }
 }
+
+/**
+ * 桌面微件配色参数模型
+ * Desktop Widget Theme Configuration Model
+ */
+data class WidgetThemeConfig(
+    val id: String,
+    val name: String,
+    val widgetBg: Color,
+    val cardBg: Color,
+    val headerText: Color,
+    val subText: Color,
+    val dateNumText: Color,
+    val accent: Color,
+    val highlight: Color,
+    val glassBorder: Color,
+    val dividerColor: Color
+)
+

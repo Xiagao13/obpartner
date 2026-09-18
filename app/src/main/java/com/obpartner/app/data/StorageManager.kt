@@ -44,7 +44,8 @@ class StorageManager(private val context: Context) {
             colorGroupProp = prefs.getString("color_group_prop", "student") ?: "student",
             displayProp = prefs.getString("display_prop", "") ?: "",
             displayFields = prefs.getString("display_fields", "student, 上课位置, 计价") ?: "student, 上课位置, 计价",
-            showContent = prefs.getBoolean("show_content", true)
+            showContent = prefs.getBoolean("show_content", true),
+            widgetTheme = prefs.getString("widget_theme", "glass") ?: "glass"
         )
     }
 
@@ -62,9 +63,11 @@ class StorageManager(private val context: Context) {
             putString("display_prop", settings.displayProp)
             putString("display_fields", settings.displayFields)
             putBoolean("show_content", settings.showContent)
+            putString("widget_theme", settings.widgetTheme)
             apply()
         }
     }
+
 
 
     /**

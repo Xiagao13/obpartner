@@ -16,6 +16,7 @@ package com.obpartner.app.model
  * @param displayProp 主标题显示键名 (如 "student"，为空时使用笔记标题) / Property name for display title
  * @param displayFields 卡片内部展示的扩展字段列表 (逗号分隔) / Comma-separated fields to display in card
  * @param showContent 是否在日程卡片内展示扩展字段 / Whether to show extra content fields in card
+ * @param widgetTheme 桌面微件视觉主题 ("glass", "dark", "amoled", "light") / Desktop widget theme
  */
 data class AppSettings(
     val folderPath: String = "",
@@ -29,6 +30,8 @@ data class AppSettings(
     val colorGroupProp: String = "student",
     val displayProp: String = "",
     val displayFields: String = "student, 上课位置, 计价",
-    val showContent: Boolean = true
+    val showContent: Boolean = true,
+    val widgetTheme: String = "glass"
 )
+
 

@@ -28,6 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.obpartner.app.data.StorageManager
 import com.obpartner.app.model.AppSettings
+import androidx.glance.appwidget.updateAll
+import com.obpartner.app.widget.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
  * 设置界面 (配置文件夹路径、系统授权、Obsidian 库名、周起始日及属性映射)
@@ -44,6 +49,7 @@ fun SettingsScreen(
 
     var folderPath by remember { mutableStateOf(currentSettings.folderPath) }
     var obsidianVault by remember { mutableStateOf(currentSettings.obsidianVaultName) }
+    var widgetTheme by remember { mutableStateOf(currentSettings.widgetTheme) }
     var weekStartsOn by remember { mutableStateOf(currentSettings.weekStartsOn) }
     var defaultStartHour by remember { mutableStateOf(currentSettings.defaultStartHour.toString()) }
     var startTimeProp by remember { mutableStateOf(currentSettings.startTimeProp) }
@@ -209,6 +215,39 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        // 5. 桌面微件视觉风格 (毛玻璃/暗黑/极黑/透白) / Desktop Widget Visual Theme
+        Text(text = "桌面小部件视觉风格", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            FilterChip(
+                selected = widgetTheme.equals("glass", ignoreCase = true),
+                onClick = { widgetTheme = "glass" },
+                label = { Text("柔光玻璃 ✨") }
+            )
+            FilterChip(
+                selected = widgetTheme.equals("dark", ignoreCase = true),
+                onClick = { widgetTheme = "dark" },
+                label = { Text("深空暗黑") }
+            )
+            FilterChip(
+                selected = widgetTheme.equals("amoled", ignoreCase = true),
+                onClick = { widgetTheme = "amoled" },
+                label = { Text("纯粹极黑") }
+            )
+            FilterChip(
+                selected = widgetTheme.equals("light", ignoreCase = true),
+                onClick = { widgetTheme = "light" },
+                label = { Text("晨曦透白") }
+            )
+        }
+        Text(
+            text = "默认推荐「柔光玻璃」，具备 70% 柔光暗晶透光与柔白微边框，透出壁纸质感极佳；修改保存后立即全量同步到桌面微件。",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         Divider()
 
         Text(
@@ -303,10 +342,27 @@ fun SettingsScreen(
                     colorGroupProp = colorGroupProp.trim(),
                     displayProp = displayProp.trim(),
                     displayFields = displayFields.trim(),
-                    showContent = showContent
+                    showContent = showContent,
+                    widgetTheme = widgetTheme
                 )
                 storageManager.saveSettings(newSettings)
-                Toast.makeText(context, "配置已保存，正在重新扫描...", Toast.LENGTH_SHORT).show()
+
+                // 异步立即触发所有桌面微件全量刷新
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        CalendarWidget3x2().updateAll(context)
+                        CalendarWidget2x3().updateAll(context)
+                        CalendarWidget2x2().updateAll(context)
+                        CalendarWidget4x2().updateAll(context)
+                        CalendarWidget4x4().updateAll(context)
+                        TodayTasksWidget3x2().updateAll(context)
+                        TodayTasksWidget2x2().updateAll(context)
+                        TodayTasksWidget4x2().updateAll(context)
+                    } catch (_: Exception) {
+                    }
+                }
+
+                Toast.makeText(context, "配置已保存，桌面组件已同步刷新！", Toast.LENGTH_SHORT).show()
                 onSettingsSaved()
             },
             modifier = Modifier.fillMaxWidth().height(48.dp)

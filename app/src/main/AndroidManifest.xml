@@ -45,7 +45,49 @@
             </intent-filter>
         </receiver>
 
-        <!-- 桌面日历组件 (通用兼容) -->
+        <!-- 桌面日历组件 3×2 (横版主推) -->
+        <receiver
+            android:name=".widget.CalendarWidget3x2Receiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/widget_calendar_3x2_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/calendar_widget_3x2_info" />
+        </receiver>
+
+        <!-- 桌面日历组件 2×3 (竖版主推) -->
+        <receiver
+            android:name=".widget.CalendarWidget2x3Receiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/widget_calendar_2x3_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/calendar_widget_2x3_info" />
+        </receiver>
+
+        <!-- 桌面日历组件 2×2 (方形精简) -->
+        <receiver
+            android:name=".widget.CalendarWidget2x2Receiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/widget_calendar_2x2_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/calendar_widget_2x2_info" />
+        </receiver>
+
+        <!-- 桌面日历组件 (通用兼容，指向 3×2) -->
         <receiver
             android:name=".widget.CalendarWidgetReceiver"
             android:enabled="true"
@@ -59,7 +101,7 @@
                 android:resource="@xml/calendar_widget_info" />
         </receiver>
 
-        <!-- 桌面日历组件 4×2 (紧凑周日历) -->
+        <!-- 桌面日历组件 4×2 (宽屏兼容) -->
         <receiver
             android:name=".widget.CalendarWidget4x2Receiver"
             android:enabled="true"
@@ -87,32 +129,18 @@
                 android:resource="@xml/calendar_widget_4x4_info" />
         </receiver>
 
-        <!-- 桌面待办组件 (通用兼容) -->
+        <!-- 桌面待办组件 3×2 (横版主推) -->
         <receiver
-            android:name=".widget.TodayTasksWidgetReceiver"
+            android:name=".widget.TodayTasksWidget3x2Receiver"
             android:enabled="true"
             android:exported="true"
-            android:label="@string/widget_today_tasks_title">
+            android:label="@string/widget_today_tasks_3x2_title">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/today_tasks_widget_info" />
-        </receiver>
-
-        <!-- 桌面待办组件 4×2 (宽版任务列表) -->
-        <receiver
-            android:name=".widget.TodayTasksWidget4x2Receiver"
-            android:enabled="true"
-            android:exported="true"
-            android:label="@string/widget_today_tasks_4x2_title">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/today_tasks_widget_4x2_info" />
+                android:resource="@xml/today_tasks_widget_3x2_info" />
         </receiver>
 
         <!-- 桌面待办组件 2×2 (方形精简看板) -->
@@ -127,6 +155,34 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/today_tasks_widget_2x2_info" />
+        </receiver>
+
+        <!-- 桌面待办组件 (通用兼容) -->
+        <receiver
+            android:name=".widget.TodayTasksWidgetReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/widget_today_tasks_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/today_tasks_widget_info" />
+        </receiver>
+
+        <!-- 桌面待办组件 4×2 (宽版任务列表兼容) -->
+        <receiver
+            android:name=".widget.TodayTasksWidget4x2Receiver"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/widget_today_tasks_4x2_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/today_tasks_widget_4x2_info" />
         </receiver>
 
 

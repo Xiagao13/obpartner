@@ -27,6 +27,8 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.obpartner.app.MainActivity
 import com.obpartner.app.calendar.CalendarUtils
+import com.obpartner.app.calendar.ColorUtils
+import com.obpartner.app.calendar.WidgetThemeConfig
 import com.obpartner.app.data.StorageManager
 import com.obpartner.app.model.TaskItem
 import com.obpartner.app.parser.MarkdownWriter
@@ -34,14 +36,47 @@ import java.io.File
 import java.util.Date
 
 /**
- * 待办桌面组件公共视图 (1:1 对齐 Freepace TaskBlock 风格)
+ * 待办桌面组件公共视图 (支持 3×2/2×2 及柔光磨砂玻璃多主题)
+ * Today Tasks Widget Shared Views (Supports 3×2, 2×2 & Glassmorphism themes)
  */
 object TodayTasksWidgetShared {
 
+    /**
+     * 柔光玻璃拟态微件外层容器
+     * Frosted Glassmorphism Outer Container
+     */
+    @Composable
+    fun GlassContainer(
+        theme: WidgetThemeConfig,
+        content: @Composable ColumnScope.() -> Unit
+    ) {
+        Box(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .background(theme.glassBorder)
+                .cornerRadius(16.dp)
+                .padding(1.dp)
+        ) {
+            Column(
+                modifier = GlanceModifier
+                    .fillMaxSize()
+                    .background(theme.widgetBg)
+                    .cornerRadius(15.dp)
+                    .padding(8.dp),
+                content = content
+            )
+        }
+    }
+
+    /**
+     * 待办通用头部
+     * Task Header
+     */
     @Composable
     fun TaskHeader(
         title: String,
         countText: String,
+        theme: WidgetThemeConfig,
         onOpenIntent: Intent
     ) {
         Row(
@@ -51,8 +86,8 @@ object TodayTasksWidgetShared {
             Text(
                 text = title,
                 style = TextStyle(
-                    color = ColorProvider(Color.White),
-                    fontSize = 14.sp,
+                    color = ColorProvider(theme.headerText),
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Bold
                 )
             )
@@ -60,7 +95,7 @@ object TodayTasksWidgetShared {
                 Text(
                     text = " $countText",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFF80CBC4)),
+                        color = ColorProvider(theme.highlight),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
                     ),
@@ -71,9 +106,9 @@ object TodayTasksWidgetShared {
             }
 
             Text(
-                text = "打开待办 ↗",
+                text = "Obsidian ↗",
                 style = TextStyle(
-                    color = ColorProvider(Color(0xFF9575CD)),
+                    color = ColorProvider(theme.accent),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
                 ),
@@ -82,10 +117,15 @@ object TodayTasksWidgetShared {
         }
     }
 
+    /**
+     * 单项待办卡片行 (一键勾选完成 + 点击标题直达 Obsidian)
+     * Task Item Row
+     */
     @Composable
     fun TaskItemRow(
         task: TaskItem,
         isOverdue: Boolean,
+        theme: WidgetThemeConfig,
         storageManager: StorageManager,
         compact: Boolean = false
     ) {
@@ -95,16 +135,16 @@ object TodayTasksWidgetShared {
             modifier = GlanceModifier
                 .fillMaxWidth()
                 .padding(vertical = 2.dp)
-                .background(Color(0xFF242538))
+                .background(theme.cardBg)
                 .cornerRadius(6.dp)
-                .padding(horizontal = 6.dp, vertical = if (compact) 4.dp else 6.dp),
+                .padding(horizontal = 6.dp, vertical = if (compact) 4.dp else 5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 点击方块一键完成 / Toggle complete
+            // 点击圆圈一键完成 / Toggle complete
             Box(
                 modifier = GlanceModifier
                     .size(if (compact) 18.dp else 22.dp)
-                    .background(Color(0xFF3F4158))
+                    .background(if (theme.id == "light") Color(0x206366F1) else Color(0x33FFFFFF))
                     .cornerRadius(4.dp)
                     .clickable(
                         actionRunCallback<ToggleTaskActionCallback>(
@@ -115,7 +155,7 @@ object TodayTasksWidgetShared {
             ) {
                 Text(
                     text = "○",
-                    style = TextStyle(color = ColorProvider(Color(0xFFB0BEC5)), fontSize = if (compact) 10.sp else 12.sp)
+                    style = TextStyle(color = ColorProvider(theme.subText), fontSize = if (compact) 10.sp else 12.sp)
                 )
             }
 
@@ -130,7 +170,7 @@ object TodayTasksWidgetShared {
                 Text(
                     text = task.name,
                     style = TextStyle(
-                        color = ColorProvider(if (isOverdue) Color(0xFFFF8A80) else Color.White),
+                        color = ColorProvider(if (isOverdue) Color(0xFFFF8A80) else theme.headerText),
                         fontSize = if (compact) 11.sp else 12.sp,
                         fontWeight = FontWeight.Medium
                     ),
@@ -140,7 +180,7 @@ object TodayTasksWidgetShared {
                     Text(
                         text = "截止: ${CalendarUtils.formatDate(Date(endTime))}",
                         style = TextStyle(
-                            color = ColorProvider(if (isOverdue) Color(0xFFFF5252) else Color(0xFF90A4AE)),
+                            color = ColorProvider(if (isOverdue) Color(0xFFFF5252) else theme.subText),
                             fontSize = 9.sp
                         )
                     )
@@ -149,7 +189,7 @@ object TodayTasksWidgetShared {
 
             Text(
                 text = "↗",
-                style = TextStyle(color = ColorProvider(Color(0xFF9575CD)), fontSize = 11.sp),
+                style = TextStyle(color = ColorProvider(theme.accent), fontSize = 10.sp),
                 modifier = GlanceModifier.clickable(actionStartActivity(openObsidianIntent))
             )
         }
@@ -157,31 +197,30 @@ object TodayTasksWidgetShared {
 }
 
 /**
- * 桌面组件 2 (4×2 列表版)
+ * 桌面待办组件 1 (3×2 横版主推 - 适配主流 5 列网格，完美居中)
+ * 3x2 Today Tasks Widget (Primary horizontal layout)
  */
-class TodayTasksWidget4x2 : GlanceAppWidget() {
+class TodayTasksWidget3x2 : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Single
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
         val (_, tasks, _) = storageManager.scanVault()
+        val settings = storageManager.getSettings()
+        val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
 
         val overdueTasks = tasks.filter { it.isOverdue && !it.isCompleted }
         val doingTasks = tasks.filter { !it.isOverdue && !it.isCompleted }
+        val completedTasks = tasks.filter { it.isCompleted }
 
         provideContent {
             val mainIntent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
 
-            Column(
-                modifier = GlanceModifier
-                    .fillMaxSize()
-                    .background(Color(0xFF181824))
-                    .cornerRadius(16.dp)
-                    .padding(8.dp)
-            ) {
+            TodayTasksWidgetShared.GlassContainer(theme = theme) {
                 TodayTasksWidgetShared.TaskHeader(
                     title = "今日待办",
-                    countText = "(${doingTasks.size + overdueTasks.size})",
+                    countText = "${completedTasks.size}/${tasks.size}",
+                    theme = theme,
                     onOpenIntent = mainIntent
                 )
 
@@ -193,8 +232,8 @@ class TodayTasksWidget4x2 : GlanceAppWidget() {
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = if (tasks.isNotEmpty()) "今日待办已全部搞定 🎉" else "暂未扫描到待办文件",
-                            style = TextStyle(color = ColorProvider(Color(0xFF81C784)), fontSize = 11.sp)
+                            text = if (tasks.isNotEmpty()) "待办已全部搞定 🎉" else "暂未扫描到待办文件",
+                            style = TextStyle(color = ColorProvider(theme.highlight), fontSize = 11.sp)
                         )
                     }
                 } else {
@@ -202,13 +241,13 @@ class TodayTasksWidget4x2 : GlanceAppWidget() {
                         if (overdueTasks.isNotEmpty()) {
                             item {
                                 Text(
-                                    text = "⚠️ 超期任务 (${overdueTasks.size})",
+                                    text = "⚠️ 超期 (${overdueTasks.size})",
                                     style = TextStyle(color = ColorProvider(Color(0xFFFF5252)), fontSize = 10.sp, fontWeight = FontWeight.Bold),
                                     modifier = GlanceModifier.padding(vertical = 1.dp)
                                 )
                             }
                             items(overdueTasks) { task ->
-                                TodayTasksWidgetShared.TaskItemRow(task = task, isOverdue = true, storageManager = storageManager)
+                                TodayTasksWidgetShared.TaskItemRow(task = task, isOverdue = true, theme = theme, storageManager = storageManager)
                             }
                         }
 
@@ -216,12 +255,12 @@ class TodayTasksWidget4x2 : GlanceAppWidget() {
                             item {
                                 Text(
                                     text = "📌 进行中 (${doingTasks.size})",
-                                    style = TextStyle(color = ColorProvider(Color(0xFF64B5F6)), fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                    modifier = GlanceModifier.padding(top = 3.dp, bottom = 1.dp)
+                                    style = TextStyle(color = ColorProvider(theme.highlight), fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                                    modifier = GlanceModifier.padding(top = 2.dp, bottom = 1.dp)
                                 )
                             }
                             items(doingTasks) { task ->
-                                TodayTasksWidgetShared.TaskItemRow(task = task, isOverdue = false, storageManager = storageManager)
+                                TodayTasksWidgetShared.TaskItemRow(task = task, isOverdue = false, theme = theme, storageManager = storageManager)
                             }
                         }
                     }
@@ -232,7 +271,8 @@ class TodayTasksWidget4x2 : GlanceAppWidget() {
 }
 
 /**
- * 桌面组件 2 (2×2 方块版 - 精简看板)
+ * 桌面待办组件 2 (2×2 方块精简版 - 紧凑看板)
+ * 2x2 Today Tasks Widget (Compact square layout)
  */
 class TodayTasksWidget2x2 : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Single
@@ -240,6 +280,8 @@ class TodayTasksWidget2x2 : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
         val (_, tasks, _) = storageManager.scanVault()
+        val settings = storageManager.getSettings()
+        val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
 
         val overdueTasks = tasks.filter { it.isOverdue && !it.isCompleted }
         val doingTasks = tasks.filter { !it.isOverdue && !it.isCompleted }
@@ -249,26 +291,20 @@ class TodayTasksWidget2x2 : GlanceAppWidget() {
             val mainIntent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
             val urgentTasks = (overdueTasks + doingTasks).take(3)
 
-            Column(
-                modifier = GlanceModifier
-                    .fillMaxSize()
-                    .background(Color(0xFF181824))
-                    .cornerRadius(16.dp)
-                    .padding(8.dp)
-            ) {
+            TodayTasksWidgetShared.GlassContainer(theme = theme) {
                 // 顶部计数概览
                 Row(
                     modifier = GlanceModifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "今日待办",
-                        style = TextStyle(color = ColorProvider(Color.White), fontSize = 13.sp, fontWeight = FontWeight.Bold),
+                        text = "待办",
+                        style = TextStyle(color = ColorProvider(theme.headerText), fontSize = 13.sp, fontWeight = FontWeight.Bold),
                         modifier = GlanceModifier.defaultWeight()
                     )
                     Text(
                         text = "${completedTasks.size}/${tasks.size}",
-                        style = TextStyle(color = ColorProvider(Color(0xFF81C784)), fontSize = 11.sp, fontWeight = FontWeight.Bold),
+                        style = TextStyle(color = ColorProvider(theme.highlight), fontSize = 11.sp, fontWeight = FontWeight.Bold),
                         modifier = GlanceModifier.clickable(actionStartActivity(mainIntent))
                     )
                 }
@@ -282,7 +318,7 @@ class TodayTasksWidget2x2 : GlanceAppWidget() {
                     ) {
                         Text(
                             text = if (tasks.isNotEmpty()) "全部搞定 🎉" else "暂无待办",
-                            style = TextStyle(color = ColorProvider(Color(0xFF81C784)), fontSize = 11.sp)
+                            style = TextStyle(color = ColorProvider(theme.highlight), fontSize = 11.sp)
                         )
                     }
                 } else {
@@ -291,6 +327,7 @@ class TodayTasksWidget2x2 : GlanceAppWidget() {
                             TodayTasksWidgetShared.TaskItemRow(
                                 task = task,
                                 isOverdue = task.isOverdue,
+                                theme = theme,
                                 storageManager = storageManager,
                                 compact = true
                             )
@@ -303,17 +340,90 @@ class TodayTasksWidget2x2 : GlanceAppWidget() {
 }
 
 /**
- * 默认待办组件
+ * 桌面待办组件 3 (4×2 宽版兼容版)
+ */
+class TodayTasksWidget4x2 : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Single
+
+    override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val storageManager = StorageManager(context)
+        val (_, tasks, _) = storageManager.scanVault()
+        val settings = storageManager.getSettings()
+        val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
+
+        val overdueTasks = tasks.filter { it.isOverdue && !it.isCompleted }
+        val doingTasks = tasks.filter { !it.isOverdue && !it.isCompleted }
+
+        provideContent {
+            val mainIntent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+
+            TodayTasksWidgetShared.GlassContainer(theme = theme) {
+                TodayTasksWidgetShared.TaskHeader(
+                    title = "今日待办",
+                    countText = "(${doingTasks.size + overdueTasks.size})",
+                    theme = theme,
+                    onOpenIntent = mainIntent
+                )
+
+                Spacer(modifier = GlanceModifier.height(4.dp))
+
+                if (overdueTasks.isEmpty() && doingTasks.isEmpty()) {
+                    Box(
+                        modifier = GlanceModifier.fillMaxWidth().defaultWeight(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (tasks.isNotEmpty()) "今日待办已全部搞定 🎉" else "暂未扫描到待办文件",
+                            style = TextStyle(color = ColorProvider(theme.highlight), fontSize = 11.sp)
+                        )
+                    }
+                } else {
+                    LazyColumn(modifier = GlanceModifier.fillMaxWidth().defaultWeight()) {
+                        if (overdueTasks.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "⚠️ 超期任务 (${overdueTasks.size})",
+                                    style = TextStyle(color = ColorProvider(Color(0xFFFF5252)), fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                                    modifier = GlanceModifier.padding(vertical = 1.dp)
+                                )
+                            }
+                            items(overdueTasks) { task ->
+                                TodayTasksWidgetShared.TaskItemRow(task = task, isOverdue = true, theme = theme, storageManager = storageManager)
+                            }
+                        }
+
+                        if (doingTasks.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "📌 进行中 (${doingTasks.size})",
+                                    style = TextStyle(color = ColorProvider(theme.highlight), fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                                    modifier = GlanceModifier.padding(top = 3.dp, bottom = 1.dp)
+                                )
+                            }
+                            items(doingTasks) { task ->
+                                TodayTasksWidgetShared.TaskItemRow(task = task, isOverdue = false, theme = theme, storageManager = storageManager)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 默认待办组件 (指向 3×2 横版主推)
  */
 class TodayTasksWidget : GlanceAppWidget() {
     override val sizeMode: SizeMode = SizeMode.Single
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        TodayTasksWidget4x2().provideGlance(context, id)
+        TodayTasksWidget3x2().provideGlance(context, id)
     }
 }
 
 /**
  * 桌面微件点击勾选完成回调
+ * Toggle Task Action Callback
  */
 class ToggleTaskActionCallback : ActionCallback {
     companion object {
@@ -325,11 +435,21 @@ class ToggleTaskActionCallback : ActionCallback {
         val file = File(path)
         if (file.exists()) {
             MarkdownWriter.updateTaskStatus(file, "Done")
-            TodayTasksWidget4x2().update(context, glanceId)
+            TodayTasksWidget3x2().update(context, glanceId)
             TodayTasksWidget2x2().update(context, glanceId)
+            TodayTasksWidget4x2().update(context, glanceId)
             TodayTasksWidget().update(context, glanceId)
         }
     }
+}
+
+// 广播接收器注册 / Broadcast Receivers
+class TodayTasksWidget3x2Receiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = TodayTasksWidget3x2()
+}
+
+class TodayTasksWidget2x2Receiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = TodayTasksWidget2x2()
 }
 
 class TodayTasksWidgetReceiver : GlanceAppWidgetReceiver() {
@@ -339,8 +459,3 @@ class TodayTasksWidgetReceiver : GlanceAppWidgetReceiver() {
 class TodayTasksWidget4x2Receiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TodayTasksWidget4x2()
 }
-
-class TodayTasksWidget2x2Receiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget: GlanceAppWidget = TodayTasksWidget2x2()
-}
-

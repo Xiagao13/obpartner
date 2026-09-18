@@ -35,7 +35,16 @@ object CalendarUtils {
         SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()),
         SimpleDateFormat("yyyy/MM/dd", Locale.getDefault()),
         SimpleDateFormat("yyyy.MM.dd HH:mm", Locale.getDefault()),
-        SimpleDateFormat("yyyy.MM.dd", Locale.getDefault())
+        SimpleDateFormat("yyyy.MM.dd", Locale.getDefault()),
+        // 兼容未显式声明 4 位年份的月-日格式，避免默认落入 1970 年
+        SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault()),
+        SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()),
+        SimpleDateFormat("MM-dd", Locale.getDefault()),
+        SimpleDateFormat("MM/dd HH:mm:ss", Locale.getDefault()),
+        SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()),
+        SimpleDateFormat("MM/dd", Locale.getDefault()),
+        SimpleDateFormat("M月d日 HH:mm", Locale.getDefault()),
+        SimpleDateFormat("M月d日", Locale.getDefault())
     )
 
     /**
@@ -77,9 +86,19 @@ object CalendarUtils {
         } catch (_: Exception) {}
 
         // 2. 尝试多种 SimpleDateFormat 格式
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
         for (format in extraFormats) {
             try {
-                return format.parse(dateStr)
+                val parsed = format.parse(dateStr)
+                if (parsed != null) {
+                    val cal = Calendar.getInstance().apply { time = parsed }
+                    // 若原始字符串不含 1970 且解析出的年份为 1970 (即月-日格式)，自动校准为当前实际年份
+                    if (cal.get(Calendar.YEAR) == 1970 && !dateStr.contains("1970")) {
+                        cal.set(Calendar.YEAR, currentYear)
+                        return cal.time
+                    }
+                    return parsed
+                }
             } catch (_: Exception) {}
         }
 
@@ -99,6 +118,13 @@ object CalendarUtils {
         val matcher = dateRegex.matcher(text)
         if (matcher.find()) {
             return matcher.group(1)?.replace('/', '-')?.replace('.', '-')
+        }
+        // 兼容无年份的文件名 (如 "09-18.md", "9-18 会议.md")，自动赋予当前年份
+        val shortMatcher = Pattern.compile("(?:^|[^\\d])(\\d{1,2}[-/.]\\d{1,2})(?:[^\\d]|$)").matcher(text)
+        if (shortMatcher.find()) {
+            val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+            val matched = shortMatcher.group(1)?.replace('/', '-')?.replace('.', '-')
+            return "$currentYear-$matched"
         }
         return null
     }

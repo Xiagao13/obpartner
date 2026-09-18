@@ -186,9 +186,13 @@ object CalendarWidgetShared {
         compact: Boolean = false
     ) {
         val openObsidianIntent = storageManager.createOpenObsidianIntent(event.path)
-        val eventDateStr = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(event.start))
-        val timeStr = if (event.isAllDay) "全天" else
-            if (compact) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(event.start))
+        val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+        val eventCal = Calendar.getInstance().apply { time = Date(event.start) }
+        val isDiffYear = eventCal.get(Calendar.YEAR) != currentYear
+        val dateFormatPattern = if (isDiffYear) "yyyy-MM-dd HH:mm" else "MM-dd HH:mm"
+        val eventDateStr = SimpleDateFormat(dateFormatPattern, Locale.getDefault()).format(Date(event.start))
+        val timeStr = if (event.isAllDay) "全天 ($eventDateStr)" else
+            if (compact) (if (isDiffYear) "${eventCal.get(Calendar.YEAR)}-" else "") + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(event.start))
             else "$eventDateStr - ${CalendarUtils.formatTime(Date(event.end))}"
 
         val isDarkTheme = theme.id != "light"
@@ -286,8 +290,18 @@ class CalendarWidget3x2 : GlanceAppWidget() {
             val monthWeekStr = SimpleDateFormat("M月 EEEE", Locale.CHINESE).format(today)
             val mainIntent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
 
+            val todayStart = Calendar.getInstance().apply {
+                time = today
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+
             val todayEvents = events.filter { CalendarUtils.isSameDay(Date(it.start), today) }
-            val displayEvents = if (todayEvents.isEmpty()) events.sortedBy { it.start }.take(3) else todayEvents
+            val upcomingEvents = events.filter { (it.start >= todayStart || it.end >= today.time) && !CalendarUtils.isSameDay(Date(it.start), today) }
+                .sortedBy { it.start }
+            val displayEvents = if (todayEvents.isNotEmpty()) todayEvents else upcomingEvents.take(3)
             val isUpcoming = todayEvents.isEmpty() && displayEvents.isNotEmpty()
 
             CalendarWidgetShared.GlassContainer(theme = theme) {
@@ -413,8 +427,18 @@ class CalendarWidget2x3 : GlanceAppWidget() {
             val weekDates = CalendarUtils.getWeekDates(today, settings.weekStartsOn)
             val mainIntent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
 
+            val todayStart = Calendar.getInstance().apply {
+                time = today
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+
             val todayEvents = events.filter { CalendarUtils.isSameDay(Date(it.start), today) }
-            val displayEvents = if (todayEvents.isEmpty()) events.sortedBy { it.start }.take(4) else todayEvents
+            val upcomingEvents = events.filter { (it.start >= todayStart || it.end >= today.time) && !CalendarUtils.isSameDay(Date(it.start), today) }
+                .sortedBy { it.start }
+            val displayEvents = if (todayEvents.isNotEmpty()) todayEvents else upcomingEvents.take(4)
             val isUpcoming = todayEvents.isEmpty() && displayEvents.isNotEmpty()
 
             CalendarWidgetShared.GlassContainer(theme = theme) {
@@ -483,8 +507,18 @@ class CalendarWidget2x2 : GlanceAppWidget() {
             val dayStr = SimpleDateFormat("M月d日 E", Locale.CHINESE).format(today)
             val mainIntent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
 
+            val todayStart = Calendar.getInstance().apply {
+                time = today
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+
             val todayEvents = events.filter { CalendarUtils.isSameDay(Date(it.start), today) }
-            val displayEvents = if (todayEvents.isEmpty()) events.sortedBy { it.start }.take(2) else todayEvents
+            val upcomingEvents = events.filter { (it.start >= todayStart || it.end >= today.time) && !CalendarUtils.isSameDay(Date(it.start), today) }
+                .sortedBy { it.start }
+            val displayEvents = if (todayEvents.isNotEmpty()) todayEvents else upcomingEvents.take(2)
             val isUpcoming = todayEvents.isEmpty() && displayEvents.isNotEmpty()
 
             CalendarWidgetShared.GlassContainer(theme = theme) {
@@ -564,8 +598,18 @@ class CalendarWidget4x2 : GlanceAppWidget() {
             val weekDates = CalendarUtils.getWeekDates(today, settings.weekStartsOn)
             val mainIntent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
 
+            val todayStart = Calendar.getInstance().apply {
+                time = today
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+
             val todayEvents = events.filter { CalendarUtils.isSameDay(Date(it.start), today) }
-            val displayEvents = if (todayEvents.isEmpty()) events.sortedBy { it.start }.take(4) else todayEvents
+            val upcomingEvents = events.filter { (it.start >= todayStart || it.end >= today.time) && !CalendarUtils.isSameDay(Date(it.start), today) }
+                .sortedBy { it.start }
+            val displayEvents = if (todayEvents.isNotEmpty()) todayEvents else upcomingEvents.take(4)
             val isUpcoming = todayEvents.isEmpty() && displayEvents.isNotEmpty()
 
             CalendarWidgetShared.GlassContainer(theme = theme) {
@@ -632,8 +676,18 @@ class CalendarWidget4x4 : GlanceAppWidget() {
             val weekDates = CalendarUtils.getWeekDates(today, settings.weekStartsOn)
             val mainIntent = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
 
+            val todayStart = Calendar.getInstance().apply {
+                time = today
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+
             val todayEvents = events.filter { CalendarUtils.isSameDay(Date(it.start), today) }
-            val displayEvents = if (todayEvents.isEmpty()) events.sortedBy { it.start }.take(8) else todayEvents
+            val upcomingEvents = events.filter { (it.start >= todayStart || it.end >= today.time) && !CalendarUtils.isSameDay(Date(it.start), today) }
+                .sortedBy { it.start }
+            val displayEvents = if (todayEvents.isNotEmpty()) todayEvents else upcomingEvents.take(8)
             val isUpcoming = todayEvents.isEmpty() && displayEvents.isNotEmpty()
 
             CalendarWidgetShared.GlassContainer(theme = theme) {

@@ -688,23 +688,14 @@ class CalendarWidget2x3 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        // 1. 毫秒级直接读取磁盘/内存持久化快照，0ms 呈现首帧，彻底消灭 Launcher ANR 和无响应
-        val events = storageManager.getCachedVaultFast()
+        var events = storageManager.getCachedVaultFast()
+        if (events.isEmpty()) {
+            val (freshEvents, _, _) = storageManager.scanVault()
+            events = freshEvents
+        }
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()
-
-        // 2. 检查是否需要初次装载（仅在缓存数据为空时后台异步获取一次）
-        if (events.isEmpty()) {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                try {
-                    val (freshEvents, _, _) = storageManager.scanVault()
-                    if (freshEvents.isNotEmpty()) {
-                        this@CalendarWidget2x3.update(context, id)
-                    }
-                } catch (_: Exception) {}
-            }
-        }
 
         // 读取持久化交互状态 (统一步调全局同步，杜绝历史脏 key 覆盖)
         val prefs = context.getSharedPreferences("widget_calendar_state", Context.MODE_PRIVATE)
@@ -938,24 +929,15 @@ class CalendarWidget3x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        // 1. 毫秒级直接读取磁盘/内存持久化快照，0ms 呈现首帧，彻底消灭 Launcher ANR 和无响应
-        val events = storageManager.getCachedVaultFast()
+        var events = storageManager.getCachedVaultFast()
+        if (events.isEmpty()) {
+            val (freshEvents, _, _) = storageManager.scanVault()
+            events = freshEvents
+        }
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()
         val lunar = LunarHelper.getLunarDetails(today)
-
-        // 2. 检查是否需要初次装载（仅在缓存数据为空时后台异步获取一次）
-        if (events.isEmpty()) {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                try {
-                    val (freshEvents, _, _) = storageManager.scanVault()
-                    if (freshEvents.isNotEmpty()) {
-                        this@CalendarWidget3x2.update(context, id)
-                    }
-                } catch (_: Exception) {}
-            }
-        }
 
         // 读取持久化交互状态 (统一步调全局同步，杜绝历史脏 key 覆盖)
         val prefs = context.getSharedPreferences("widget_calendar_state", Context.MODE_PRIVATE)
@@ -1146,24 +1128,15 @@ class CalendarWidget2x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        // 1. 毫秒级直接读取磁盘/内存持久化快照
-        val events = storageManager.getCachedVaultFast()
+        var events = storageManager.getCachedVaultFast()
+        if (events.isEmpty()) {
+            val (freshEvents, _, _) = storageManager.scanVault()
+            events = freshEvents
+        }
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()
         val lunar = LunarHelper.getLunarDetails(today)
-
-        // 2. 检查是否需要初次装载（仅在缓存数据为空时后台异步获取一次）
-        if (events.isEmpty()) {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                try {
-                    val (freshEvents, _, _) = storageManager.scanVault()
-                    if (freshEvents.isNotEmpty()) {
-                        this@CalendarWidget2x2.update(context, id)
-                    }
-                } catch (_: Exception) {}
-            }
-        }
 
         val prefs = context.getSharedPreferences("widget_calendar_state", Context.MODE_PRIVATE)
         val weekOffset = prefs.getInt("global_calendar_week_offset", 0)

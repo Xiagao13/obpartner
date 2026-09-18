@@ -20,6 +20,10 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.util.Calendar
 import java.util.Date
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import androidx.glance.appwidget.updateAll
 
 /**
  * 本地存储与 Obsidian 联动管理器
@@ -112,12 +116,12 @@ class StorageManager(private val context: Context) {
                 for (t in tasksToSave.take(300)) {
                     val tObj = JSONObject().apply {
                         put("id", t.id)
-                        put("title", t.title)
+                        put("name", t.name)
                         put("path", t.path)
                         put("status", t.status)
                         put("priority", t.priority)
-                        put("startDate", t.startDate)
-                        put("dueDate", t.dueDate)
+                        if (t.explicitStart != null) put("explicitStart", t.explicitStart)
+                        if (t.explicitEnd != null) put("explicitEnd", t.explicitEnd)
                         put("vaultRelativePath", t.vaultRelativePath)
                     }
                     tArr.put(tObj)
@@ -184,12 +188,12 @@ class StorageManager(private val context: Context) {
                 list.add(
                     TaskItem(
                         id = obj.optString("id"),
-                        title = obj.optString("title"),
+                        name = obj.optString("name", obj.optString("title", "")),
                         path = obj.optString("path"),
                         status = obj.optString("status", "Todo"),
-                        priority = obj.optString("priority", "Normal"),
-                        startDate = obj.optLong("startDate"),
-                        dueDate = obj.optLong("dueDate"),
+                        priority = obj.optString("priority", "P2"),
+                        explicitStart = if (obj.has("explicitStart")) obj.optLong("explicitStart") else null,
+                        explicitEnd = if (obj.has("explicitEnd")) obj.optLong("explicitEnd") else null,
                         vaultRelativePath = obj.optString("vaultRelativePath", "")
                     )
                 )

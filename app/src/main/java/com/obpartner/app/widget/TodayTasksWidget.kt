@@ -205,18 +205,13 @@ class TodayTasksWidget3x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val tasks = storageManager.getCachedTasksFast()
+        var tasks = storageManager.getCachedTasksFast()
+        if (tasks.isEmpty()) {
+            val (_, freshTasks, _) = storageManager.scanVault()
+            tasks = freshTasks
+        }
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
-
-        if (tasks.isEmpty()) {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                try {
-                    storageManager.scanVault()
-                    this@TodayTasksWidget3x2.update(context, id)
-                } catch (_: Exception) {}
-            }
-        }
 
         val overdueTasks = tasks.filter { it.isOverdue && !it.isCompleted }
         val doingTasks = tasks.filter { !it.isOverdue && !it.isCompleted }
@@ -288,18 +283,13 @@ class TodayTasksWidget2x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val tasks = storageManager.getCachedTasksFast()
+        var tasks = storageManager.getCachedTasksFast()
+        if (tasks.isEmpty()) {
+            val (_, freshTasks, _) = storageManager.scanVault()
+            tasks = freshTasks
+        }
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
-
-        if (tasks.isEmpty()) {
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                try {
-                    storageManager.scanVault()
-                    this@TodayTasksWidget2x2.update(context, id)
-                } catch (_: Exception) {}
-            }
-        }
 
         val overdueTasks = tasks.filter { it.isOverdue && !it.isCompleted }
         val doingTasks = tasks.filter { !it.isOverdue && !it.isCompleted }
@@ -365,7 +355,11 @@ class TodayTasksWidget4x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val tasks = storageManager.getCachedTasksFast()
+        var tasks = storageManager.getCachedTasksFast()
+        if (tasks.isEmpty()) {
+            val (_, freshTasks, _) = storageManager.scanVault()
+            tasks = freshTasks
+        }
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
 

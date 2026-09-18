@@ -295,10 +295,10 @@ class CalendarWidget3x2 : GlanceAppWidget() {
                     modifier = GlanceModifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 左侧大号日期看板 (~36% 宽度)
+                    // 左侧大号日期看板 (固定紧凑宽度)
                     Column(
                         modifier = GlanceModifier
-                            .defaultWeight(1.1f)
+                            .width(88.dp)
                             .fillMaxHeight(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -347,10 +347,10 @@ class CalendarWidget3x2 : GlanceAppWidget() {
 
                     Spacer(modifier = GlanceModifier.width(6.dp))
 
-                    // 右侧日程内容列表 (~64% 宽度)
+                    // 右侧日程内容列表 (自适应撑满剩余宽度)
                     Column(
                         modifier = GlanceModifier
-                            .defaultWeight(1.9f)
+                            .defaultWeight()
                             .fillMaxHeight()
                     ) {
                         Text(

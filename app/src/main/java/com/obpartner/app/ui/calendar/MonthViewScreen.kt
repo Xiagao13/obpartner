@@ -211,7 +211,7 @@ fun MonthViewScreen(
                                 .padding(vertical = 4.dp)
                                 .clickable {
                                     // 核心联动：点击直接在 Obsidian 中打开 / Open in Obsidian
-                                    storageManager.createOpenObsidianIntent(event.path)
+                                    storageManager.createOpenObsidianIntent(event.path, event.vaultRelativePath)
                                         .let { context.startActivity(it) }
                                     onEventClick(event)
                                 },

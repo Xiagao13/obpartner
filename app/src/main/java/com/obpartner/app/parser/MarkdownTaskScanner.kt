@@ -17,7 +17,8 @@ object MarkdownTaskScanner {
         fileName: String,
         frontmatter: Map<String, Any>,
         settings: AppSettings,
-        todayMidnight: Long
+        todayMidnight: Long,
+        relativePath: String = ""
     ): TaskItem? {
         val type = frontmatter["type"]?.toString() ?: return null
         val allowedTypes = listOf("Project", "Event", "Habit", "Idea", "HabitRecord", "Task")
@@ -38,13 +39,11 @@ object MarkdownTaskScanner {
         val endRaw = frontmatter[settings.taskEndKey]
             ?: frontmatter["due_date"]
             ?: frontmatter["end_date"]
-            ?: frontmatter["date"]
 
-        val explicitStart = CalendarUtils.parseDate(startRaw)?.time
-        val explicitEnd = CalendarUtils.parseDate(endRaw)?.time
+        val explicitStart = startRaw?.let { CalendarUtils.parseDate(it.toString())?.time }
+        val explicitEnd = endRaw?.let { CalendarUtils.parseDate(it.toString())?.time }
 
-        val isOverdue = !status.equals("Done", ignoreCase = true) &&
-                explicitEnd != null && explicitEnd < todayMidnight
+        val isOverdue = explicitEnd != null && explicitEnd < todayMidnight && !status.equals("Done", ignoreCase = true)
 
         val workLogList = when (val wl = frontmatter["work_log"]) {
             is List<*> -> wl.mapNotNull { it?.toString() }
@@ -73,7 +72,8 @@ object MarkdownTaskScanner {
             explicitEnd = explicitEnd,
             isOverdue = isOverdue,
             workLog = workLogList,
-            tags = tagsList
+            tags = tagsList,
+            vaultRelativePath = relativePath
         )
     }
 
@@ -81,7 +81,8 @@ object MarkdownTaskScanner {
         filePath: String,
         fileName: String,
         frontmatter: Map<String, Any>,
-        todayStr: String
+        todayStr: String,
+        relativePath: String = ""
     ): HabitItem? {
         val type = frontmatter["type"]?.toString() ?: return null
         if (!type.equals("Habit", ignoreCase = true)) return null
@@ -102,7 +103,8 @@ object MarkdownTaskScanner {
             path = filePath,
             isDoneToday = isDoneToday,
             streak = streak,
-            history = workLogList
+            history = workLogList,
+            vaultRelativePath = relativePath
         )
     }
 

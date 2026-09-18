@@ -31,7 +31,8 @@ data class TaskItem(
     val explicitEnd: Long? = null,
     val isOverdue: Boolean = false,
     val workLog: List<String> = emptyList(),
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val vaultRelativePath: String = ""
 ) {
     val isCompleted: Boolean
         get() = status.equals("Done", ignoreCase = true)

@@ -170,7 +170,7 @@ fun DayViewScreen(
                                 .background(bgColor)
                                 .border(1.dp, borderColor, RoundedCornerShape(4.dp))
                                 .clickable {
-                                    storageManager.createOpenObsidianIntent(ev.path).let { context.startActivity(it) }
+                                    storageManager.createOpenObsidianIntent(ev.path, ev.vaultRelativePath).let { context.startActivity(it) }
                                     onEventClick(ev)
                                 }
                                 .padding(6.dp)
@@ -274,7 +274,7 @@ fun DayViewScreen(
                                 .background(bgColor)
                                 .border(1.dp, borderColor, RoundedCornerShape(6.dp))
                                 .clickable {
-                                    storageManager.createOpenObsidianIntent(event.path).let { context.startActivity(it) }
+                                    storageManager.createOpenObsidianIntent(event.path, event.vaultRelativePath).let { context.startActivity(it) }
                                     onEventClick(event)
                                 }
                                 .padding(6.dp)

@@ -126,7 +126,7 @@ fun WeekViewScreen(
                         weekDates = weekDates,
                         allDayEventsByDate = allDayEventsByDate,
                         onEventClick = { event ->
-                            storageManager.createOpenObsidianIntent(event.path).let { context.startActivity(it) }
+                            storageManager.createOpenObsidianIntent(event.path, event.vaultRelativePath).let { context.startActivity(it) }
                             onEventClick(event)
                         }
                     )
@@ -237,7 +237,7 @@ fun WeekViewScreen(
                                                 .border(1.dp, borderColor, RoundedCornerShape(4.dp))
                                                 .clickable {
                                                     // 点击直达打开 Obsidian 笔记 / Click opens Obsidian directly
-                                                    storageManager.createOpenObsidianIntent(event.path)
+                                                    storageManager.createOpenObsidianIntent(event.path, event.vaultRelativePath)
                                                         .let { context.startActivity(it) }
                                                     onEventClick(event)
                                                 }

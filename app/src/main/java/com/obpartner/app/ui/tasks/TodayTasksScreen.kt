@@ -82,7 +82,7 @@ fun TodayTasksScreen(
                                 }
                             },
                             onClick = {
-                                storageManager.createOpenObsidianIntent(habit.path).let { context.startActivity(it) }
+                                storageManager.createOpenObsidianIntent(habit.path, habit.vaultRelativePath).let { context.startActivity(it) }
                             }
                         )
                     }
@@ -114,7 +114,7 @@ fun TodayTasksScreen(
                         }
                     },
                     onClick = {
-                        storageManager.createOpenObsidianIntent(task.path).let { context.startActivity(it) }
+                        storageManager.createOpenObsidianIntent(task.path, task.vaultRelativePath).let { context.startActivity(it) }
                     }
                 )
             }
@@ -148,7 +148,7 @@ fun TodayTasksScreen(
                         }
                     },
                     onClick = {
-                        storageManager.createOpenObsidianIntent(task.path).let { context.startActivity(it) }
+                        storageManager.createOpenObsidianIntent(task.path, task.vaultRelativePath).let { context.startActivity(it) }
                     }
                 )
             }
@@ -174,7 +174,7 @@ fun TodayTasksScreen(
                         }
                     },
                     onClick = {
-                        storageManager.createOpenObsidianIntent(task.path).let { context.startActivity(it) }
+                        storageManager.createOpenObsidianIntent(task.path, task.vaultRelativePath).let { context.startActivity(it) }
                     }
                 )
             }

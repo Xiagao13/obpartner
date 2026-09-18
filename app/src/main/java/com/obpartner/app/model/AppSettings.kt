@@ -19,8 +19,10 @@ package com.obpartner.app.model
  * @param widgetTheme 桌面微件视觉主题 ("glass", "dark", "amoled", "light") / Desktop widget theme
  */
 data class AppSettings(
-    val folderPath: String = "",
     val obsidianVaultName: String = "",
+    val vaultPath: String = "",
+    val dataFolders: String = "",
+    val folderPath: String = "",
     val weekStartsOn: String = "monday",
     val defaultStartHour: Int = 8,
     val startTimeProp: String = "start_time",
@@ -32,6 +34,23 @@ data class AppSettings(
     val displayFields: String = "student, 上课位置, 计价",
     val showContent: Boolean = true,
     val widgetTheme: String = "glass"
-)
+) {
+    /**
+     * 获取有效的 Vault 根目录 (优先使用新版 vaultPath，为空时回退到旧版 folderPath)
+     */
+    fun getEffectiveVaultPath(): String {
+        return vaultPath.ifBlank { folderPath }.trim()
+    }
+
+    /**
+     * 获取配置的调用的数据文件夹列表 (按逗号、分号或换行拆分)
+     */
+    fun getDataFolderList(): List<String> {
+        if (dataFolders.isBlank()) return emptyList()
+        return dataFolders.split(",", "，", ";", "；", "\n")
+            .map { it.trim().removePrefix("/").removeSuffix("/") }
+            .filter { it.isNotEmpty() }
+    }
+}
 
 

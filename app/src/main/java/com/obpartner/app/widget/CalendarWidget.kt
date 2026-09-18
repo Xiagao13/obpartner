@@ -508,7 +508,7 @@ object CalendarWidgetShared {
         showExtraFields: Boolean = false,
         compact: Boolean = false
     ) {
-        val openObsidianIntent = storageManager.createOpenObsidianIntent(event.path)
+        val openObsidianIntent = storageManager.createOpenObsidianIntent(event.path, event.vaultRelativePath)
         val currentYear = Calendar.getInstance().get(Calendar.YEAR)
         val eventCal = Calendar.getInstance().apply { time = Date(event.start) }
         val isDiffYear = eventCal.get(Calendar.YEAR) != currentYear

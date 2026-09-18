@@ -165,7 +165,7 @@ fun MainAppScreen() {
                             settings = settings,
                             onEventClick = { ev ->
                                 try {
-                                    val intent = storageManager.createOpenObsidianIntent(ev.path)
+                                    val intent = storageManager.createOpenObsidianIntent(ev.path, ev.vaultRelativePath)
                                     context.startActivity(intent)
                                 } catch (_: Exception) {}
                             }
@@ -175,7 +175,7 @@ fun MainAppScreen() {
                             settings = settings,
                             onEventClick = { ev ->
                                 try {
-                                    val intent = storageManager.createOpenObsidianIntent(ev.path)
+                                    val intent = storageManager.createOpenObsidianIntent(ev.path, ev.vaultRelativePath)
                                     context.startActivity(intent)
                                 } catch (_: Exception) {}
                             }
@@ -185,7 +185,7 @@ fun MainAppScreen() {
                             settings = settings,
                             onEventClick = { ev ->
                                 try {
-                                    val intent = storageManager.createOpenObsidianIntent(ev.path)
+                                    val intent = storageManager.createOpenObsidianIntent(ev.path, ev.vaultRelativePath)
                                     context.startActivity(intent)
                                 } catch (_: Exception) {}
                             }

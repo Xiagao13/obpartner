@@ -129,7 +129,7 @@ object TodayTasksWidgetShared {
         storageManager: StorageManager,
         compact: Boolean = false
     ) {
-        val openObsidianIntent = storageManager.createOpenObsidianIntent(task.path)
+        val openObsidianIntent = storageManager.createOpenObsidianIntent(task.path, task.vaultRelativePath)
 
         Row(
             modifier = GlanceModifier

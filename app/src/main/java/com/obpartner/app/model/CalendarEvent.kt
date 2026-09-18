@@ -31,5 +31,6 @@ data class CalendarEvent(
     val extraData: Map<String, Any> = emptyMap(),
     val laneIndex: Int = 0,
     val overlapIndex: Int = 0,
-    val overlapCount: Int = 1
+    val overlapCount: Int = 1,
+    val vaultRelativePath: String = ""
 )

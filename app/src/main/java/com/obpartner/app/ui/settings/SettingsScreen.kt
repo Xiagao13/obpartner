@@ -49,6 +49,8 @@ fun SettingsScreen(
 
     var folderPath by remember { mutableStateOf(currentSettings.folderPath) }
     var obsidianVault by remember { mutableStateOf(currentSettings.obsidianVaultName) }
+    var vaultPath by remember { mutableStateOf(currentSettings.getEffectiveVaultPath()) }
+    var dataFolders by remember { mutableStateOf(currentSettings.dataFolders) }
     var widgetTheme by remember { mutableStateOf(currentSettings.widgetTheme) }
     var weekStartsOn by remember { mutableStateOf(currentSettings.weekStartsOn) }
     var defaultStartHour by remember { mutableStateOf(currentSettings.defaultStartHour.toString()) }
@@ -61,9 +63,8 @@ fun SettingsScreen(
     var displayFields by remember { mutableStateOf(currentSettings.displayFields) }
     var showContent by remember { mutableStateOf(currentSettings.showContent) }
 
-
-    // SAF 文件夹选择器
-    val folderPicker = rememberLauncherForActivityResult(
+    // SAF 库根目录选择器
+    val vaultFolderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
@@ -72,10 +73,40 @@ fun SettingsScreen(
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
-            } catch (_: Exception) {
+            } catch (_: Exception) {}
+            vaultPath = uri.toString()
+            if (obsidianVault.isBlank()) {
+                val decoded = Uri.decode(uri.toString())
+                val candidate = decoded.substringAfterLast("/").substringAfterLast(":")
+                if (candidate.isNotBlank()) {
+                    obsidianVault = candidate
+                }
             }
-            folderPath = uri.toString()
-            Toast.makeText(context, "已选取文件夹: $uri", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "已选取 Obsidian 库根目录", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // SAF 数据子文件夹添加选择器
+    val subFolderPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            } catch (_: Exception) {}
+            val decoded = Uri.decode(uri.toString())
+            val folderName = decoded.substringAfterLast("/").substringAfterLast(":")
+            if (folderName.isNotBlank()) {
+                val currentList = dataFolders.split(",", "，").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+                if (!currentList.contains(folderName)) {
+                    currentList.add(folderName)
+                    dataFolders = currentList.joinToString(", ")
+                    Toast.makeText(context, "已添加数据文件夹: $folderName", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -161,38 +192,123 @@ fun SettingsScreen(
             }
         }
 
-        // 1. 文件夹路径与选择器 / Folder Paths
-        Column {
-            OutlinedTextField(
-                value = folderPath,
-                onValueChange = { folderPath = it },
-                label = { Text("Markdown 文件夹路径") },
-                placeholder = { Text("/sdcard/Documents/Obsidian 或 点击右侧选择") },
-                supportingText = { Text("留空时会自动尝试扫描系统默认 Documents/Obsidian 目录") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Button(
-                onClick = { folderPicker.launch(null) },
-                modifier = Modifier.fillMaxWidth()
+        // ================= 严格规范的三步式 Obsidian 路径配置卡片 =================
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Icon(Icons.Default.FolderOpen, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("打开系统文件选择器选取文件夹 (SAF)")
+                Text(
+                    text = "📁 Obsidian 库与数据路径规范配置",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                // 第一步：确定 Obsidian 库名称
+                OutlinedTextField(
+                    value = obsidianVault,
+                    onValueChange = { obsidianVault = it },
+                    label = { Text("第一步：Obsidian 库名称 (Vault Name) *") },
+                    placeholder = { Text("例如: MyVault 或 个人知识库") },
+                    supportingText = { Text("用于在 Obsidian 中以正规协议精准定位仓库") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                // 第二步：确定库所在的根文件夹
+                Column {
+                    OutlinedTextField(
+                        value = vaultPath,
+                        onValueChange = { vaultPath = it },
+                        label = { Text("第二步：库所在的根文件夹 (Vault 根目录) *") },
+                        placeholder = { Text("/sdcard/Documents/Obsidian/MyVault 或点击下方选择") },
+                        supportingText = { Text("指向包含 .obsidian 配置目录的仓库最外层根目录") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = { vaultFolderPicker.launch(null) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.FolderOpen, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("打开系统文件选择器选取库根目录 (SAF)")
+                    }
+                }
+
+                // 第三步：选择需要调用的数据所在的文件夹（可选择多个）
+                Column {
+                    OutlinedTextField(
+                        value = dataFolders,
+                        onValueChange = { dataFolders = it },
+                        label = { Text("第三步：选择调用的数据文件夹 (可多选，逗号隔开)") },
+                        placeholder = { Text("例如: 日历, 课程, 日记 (留空则扫描整个库)") },
+                        supportingText = { Text("只扫描库内指定子文件夹，极大提升扫描速度与性能") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Button(
+                            onClick = { subFolderPicker.launch(null) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("+ 选取添加子文件夹")
+                        }
+                    }
+
+                    // 常用推荐文件夹快捷标签
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("常用推荐:", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val sampleFolders = listOf("日历", "日记", "课程", "日程安排")
+                        sampleFolders.forEach { tag ->
+                            val isAdded = dataFolders.contains(tag)
+                            FilterChip(
+                                selected = isAdded,
+                                onClick = {
+                                    val list = dataFolders.split(",", "，").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+                                    if (isAdded) list.remove(tag) else list.add(tag)
+                                    dataFolders = list.joinToString(", ")
+                                },
+                                label = { Text(tag, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                }
+
+                // 正规相对路径协议跳转效果预览
+                val sampleRelPath = if (dataFolders.isNotBlank()) "${dataFolders.split(",", "，").first().trim()}/示例日程.md" else "示例日程.md"
+                val sampleVaultName = obsidianVault.ifBlank { "库名" }
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("✨ Obsidian 正规协议跳转预览：", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            text = "obsidian://open?vault=$sampleVaultName&file=$sampleRelPath",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        )
+                        Text("👉 使用 Obsidian 库内纯净相对路径，杜绝移动端完整绝对路径造成的找不到笔记问题。", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
+                    }
+                }
             }
         }
 
-        // 2. Obsidian 仓库名 (用于一键直达跳转) / Obsidian Vault Name
-        OutlinedTextField(
-            value = obsidianVault,
-            onValueChange = { obsidianVault = it },
-            label = { Text("Obsidian 仓库名称 (用于点击笔记直接呼起)") },
-            placeholder = { Text("例如: MyVault") },
-            supportingText = { Text("若填写，点击桌面小部件上的日程将以 obsidian://open 协议秒开该笔记") },
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // 3. 每周起始日 / First Day of Week
+        // 每周起始日 / First Day of Week
         Text(text = "每周起始日", fontSize = 14.sp, fontWeight = FontWeight.Medium)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             FilterChip(
@@ -331,8 +447,10 @@ fun SettingsScreen(
         Button(
             onClick = {
                 val newSettings = AppSettings(
-                    folderPath = folderPath.trim(),
                     obsidianVaultName = obsidianVault.trim(),
+                    vaultPath = vaultPath.trim(),
+                    dataFolders = dataFolders.trim(),
+                    folderPath = vaultPath.trim(),
                     weekStartsOn = weekStartsOn,
                     defaultStartHour = defaultStartHour.toIntOrNull() ?: 8,
                     startTimeProp = startTimeProp.trim(),

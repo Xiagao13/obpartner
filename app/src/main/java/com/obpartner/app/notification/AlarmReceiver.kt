@@ -15,9 +15,10 @@ class AlarmReceiver : BroadcastReceiver() {
             val title = intent.getStringExtra(NotificationHelper.EXTRA_EVENT_TITLE) ?: "日程待办"
             val path = intent.getStringExtra(NotificationHelper.EXTRA_EVENT_PATH) ?: return
             val time = intent.getLongExtra(NotificationHelper.EXTRA_EVENT_TIME, System.currentTimeMillis())
+            val relPath = intent.getStringExtra(NotificationHelper.EXTRA_EVENT_VAULT_REL_PATH)
 
             val notificationHelper = NotificationHelper(context)
-            notificationHelper.showEventNotification(title, path, time)
+            notificationHelper.showEventNotification(title, path, time, relPath)
         }
     }
 }

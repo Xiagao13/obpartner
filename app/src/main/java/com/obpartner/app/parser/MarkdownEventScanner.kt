@@ -16,7 +16,8 @@ object MarkdownEventScanner {
         filePath: String,
         fileName: String,
         frontmatter: Map<String, Any>,
-        settings: AppSettings
+        settings: AppSettings,
+        relativePath: String = ""
     ): CalendarEvent? {
         // 1. 获取日期基准上下文 (优先从 date 字段，其次从文件名如 2026-05-01.md 提取)
         val dateContextStr = frontmatter["date"]?.toString()
@@ -167,7 +168,8 @@ object MarkdownEventScanner {
             isCrossDay = isCrossDay,
             colorValue = colorVal,
             displayText = displayText,
-            extraData = extraData
+            extraData = extraData,
+            vaultRelativePath = relativePath
         )
     }
 
@@ -180,7 +182,8 @@ object MarkdownEventScanner {
         fileName: String,
         bodyContent: String,
         frontmatter: Map<String, Any>,
-        settings: AppSettings
+        settings: AppSettings,
+        relativePath: String = ""
     ): List<CalendarEvent> {
         if (bodyContent.isBlank()) return emptyList()
 
@@ -193,42 +196,43 @@ object MarkdownEventScanner {
         val baseDate = dateContextStr?.let { CalendarUtils.parseDate(it) } ?: Date()
 
         val results = mutableListOf<CalendarEvent>()
+
         val lines = bodyContent.lines()
-
         var insideScheduleSection = false
-        var lineIndex = 0
 
-        // 正则 1: 时间段 "8:30-10:30 林小琰", "- [ ] 8:30-10:30 林小琰", "- 13:30~15:30 徐曌宇"
-        val timeRangeRegex = Pattern.compile("^\\s*(?:[-*+]\\s*(?:\\[[ xX]?\\]\\s*)?|\\d+\\.\\s*)?(\\d{1,2}:\\d{2})\\s*(?:-|~|–|—|至|to)\\s*(\\d{1,2}:\\d{2})\\s*(.*)$")
-        // 正则 2: 单个时间点 "- [ ] 14:00 开会", "09:30 晨会"
-        val singleTimeRegex = Pattern.compile("^\\s*(?:[-*+]\\s*(?:\\[[ xX]?\\]\\s*)?|\\d+\\.\\s*)?(\\d{1,2}:\\d{2})\\s+(.+)$")
+        // 1. 正则匹配：支持 - [ ] 08:30-10:00 任务标题 或 08:30-10:00 会议 等多种模式
+        val rangePattern = Pattern.compile("(?:^|[-*+]\\s+(?:\\[[ xX/]\\]\\s+)?)(?:\\d{4}-\\d{2}-\\d{2}\\s+)?(\\d{1,2}:\\d{2})\\s*(?:-|~|至|到)\\s*(\\d{1,2}:\\d{2})\\s*(.*)$")
+        val singlePattern = Pattern.compile("(?:^|[-*+]\\s+(?:\\[[ xX/]\\]\\s+)?)(?:\\d{4}-\\d{2}-\\d{2}\\s+)?(\\d{1,2}:\\d{2})\\s+(.*)$")
 
-        for (rawLine in lines) {
-            lineIndex++
+        for ((lineIndex, rawLine) in lines.withIndex()) {
             val line = rawLine.trim()
             if (line.isBlank()) continue
 
-            // 检查是否进入/离开指定标题区域 (如 ## 日程安排, ## 今日日程, ## 预定日程)
+            // 检查标题段落：如 ## 日程安排、### 今日课程 等
             if (line.startsWith("#")) {
-                val headerTitle = line.replace("#", "").trim()
-                insideScheduleSection = headerTitle.contains("日程") ||
-                        headerTitle.contains("时间表") ||
-                        headerTitle.contains("课表") ||
-                        headerTitle.contains("安排") ||
-                        headerTitle.contains("Schedule") ||
-                        headerTitle.contains("Event")
+                val headerLower = line.lowercase()
+                insideScheduleSection = headerLower.contains("日程") ||
+                        headerLower.contains("安排") ||
+                        headerLower.contains("schedule") ||
+                        headerLower.contains("课程") ||
+                        headerLower.contains("计划") ||
+                        headerLower.contains("timeline")
                 continue
             }
 
-            // 尝试匹配时间段
-            val rangeMatcher = timeRangeRegex.matcher(line)
+            // 匹配时间段日程
+            val rangeMatcher = rangePattern.matcher(line)
             if (rangeMatcher.find()) {
                 val startStr = rangeMatcher.group(1) ?: continue
                 val endStr = rangeMatcher.group(2) ?: continue
                 val desc = rangeMatcher.group(3)?.trim() ?: ""
 
                 val start = CalendarUtils.combineDateAndTime(baseDate, startStr) ?: continue
-                val end = CalendarUtils.combineDateAndTime(baseDate, endStr) ?: Date(start.time + 3600000L)
+                var end = CalendarUtils.combineDateAndTime(baseDate, endStr) ?: Date(start.time + 3600000L)
+                if (end.before(start)) {
+                    // 跨天情况 (如 23:00 - 01:00)
+                    end = Date(end.time + 24 * 3600000L)
+                }
 
                 val cleanTitle = desc.replace(Regex("^[-*+\\s]+"), "").ifBlank {
                     fileName.removeSuffix(".md").removeSuffix(".markdown")
@@ -242,21 +246,22 @@ object MarkdownEventScanner {
                         start = start.time,
                         end = end.time,
                         isAllDay = false,
-                        isCrossDay = false,
+                        isCrossDay = !CalendarUtils.isSameDay(start, end),
                         colorValue = cleanTitle,
                         displayText = cleanTitle,
                         extraData = mapOf(
                             "file.name" to fileName.removeSuffix(".md").removeSuffix(".markdown"),
                             "source" to "body_schedule"
-                        )
+                        ),
+                        vaultRelativePath = relativePath
                     )
                 )
                 continue
             }
 
-            // 若处于日程段落内，支持单时间点 (如 14:00 拜访客户)
+            // 若在日程专属区块内，支持单时间点匹配 (如 "14:00 客户拜访")
             if (insideScheduleSection) {
-                val singleMatcher = singleTimeRegex.matcher(line)
+                val singleMatcher = singlePattern.matcher(line)
                 if (singleMatcher.find()) {
                     val startStr = singleMatcher.group(1) ?: continue
                     val desc = singleMatcher.group(2)?.trim() ?: ""
@@ -282,7 +287,8 @@ object MarkdownEventScanner {
                             extraData = mapOf(
                                 "file.name" to fileName.removeSuffix(".md").removeSuffix(".markdown"),
                                 "source" to "body_schedule"
-                            )
+                            ),
+                            vaultRelativePath = relativePath
                         )
                     )
                 }

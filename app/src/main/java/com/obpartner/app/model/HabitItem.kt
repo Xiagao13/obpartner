@@ -10,6 +10,7 @@ package com.obpartner.app.model
  * @param isDoneToday 今日是否已打卡 / Whether it has been checked in today
  * @param streak 连续打卡天数 / Current continuous streak count
  * @param history 历史打卡日期列表 (格式: YYYY-MM-DD) / History of check-in dates
+ * @param vaultRelativePath 相对于 Obsidian 库根目录的规范相对路径 / Relative path in Obsidian vault
  */
 data class HabitItem(
     val id: String,
@@ -17,5 +18,6 @@ data class HabitItem(
     val path: String,
     val isDoneToday: Boolean = false,
     val streak: Int = 0,
-    val history: List<String> = emptyList()
+    val history: List<String> = emptyList(),
+    val vaultRelativePath: String = ""
 )

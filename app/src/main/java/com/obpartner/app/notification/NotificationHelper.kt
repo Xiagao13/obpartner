@@ -25,6 +25,7 @@ class NotificationHelper(private val context: Context) {
         const val EXTRA_EVENT_TITLE = "extra_event_title"
         const val EXTRA_EVENT_PATH = "extra_event_path"
         const val EXTRA_EVENT_TIME = "extra_event_time"
+        const val EXTRA_EVENT_VAULT_REL_PATH = "extra_event_vault_rel_path"
     }
 
     private val notificationManager =
@@ -63,6 +64,7 @@ class NotificationHelper(private val context: Context) {
             putExtra(EXTRA_EVENT_TITLE, event.title)
             putExtra(EXTRA_EVENT_PATH, event.path)
             putExtra(EXTRA_EVENT_TIME, event.start)
+            putExtra(EXTRA_EVENT_VAULT_REL_PATH, event.vaultRelativePath)
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
@@ -96,9 +98,14 @@ class NotificationHelper(private val context: Context) {
      * 弹出日程到达的系统通知（附带点击直接打开 Obsidian 的快捷动作）
      * Show notification with action to open directly in Obsidian
      */
-    fun showEventNotification(title: String, filePath: String, timeMillis: Long) {
+    fun showEventNotification(
+        title: String,
+        filePath: String,
+        timeMillis: Long,
+        vaultRelativePath: String? = null
+    ) {
         val storageManager = StorageManager(context)
-        val openIntent = storageManager.createOpenObsidianIntent(filePath)
+        val openIntent = storageManager.createOpenObsidianIntent(filePath, vaultRelativePath)
         val contentPendingIntent = PendingIntent.getActivity(
             context,
             filePath.hashCode(),

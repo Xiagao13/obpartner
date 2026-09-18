@@ -97,14 +97,13 @@ fun SettingsScreen(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
             } catch (_: Exception) {}
-            val decoded = Uri.decode(uri.toString())
-            val folderName = decoded.substringAfterLast("/").substringAfterLast(":")
-            if (folderName.isNotBlank()) {
+            val resolvedSubPath = resolveSubFolderPath(uri, vaultPath, obsidianVault)
+            if (resolvedSubPath.isNotBlank()) {
                 val currentList = dataFolders.split(",", "，").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
-                if (!currentList.contains(folderName)) {
-                    currentList.add(folderName)
+                if (!currentList.contains(resolvedSubPath)) {
+                    currentList.add(resolvedSubPath)
                     dataFolders = currentList.joinToString(", ")
-                    Toast.makeText(context, "已添加数据文件夹: $folderName", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "已添加数据路径: $resolvedSubPath", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -240,14 +239,14 @@ fun SettingsScreen(
                     }
                 }
 
-                // 第三步：选择需要调用的数据所在的文件夹（可选择多个）
+                // 第三步：选择需要调用的数据所在的文件夹路径（可选择多个）
                 Column {
                     OutlinedTextField(
                         value = dataFolders,
                         onValueChange = { dataFolders = it },
-                        label = { Text("第三步：选择调用的数据文件夹 (可多选，逗号隔开)") },
-                        placeholder = { Text("例如: 日历, 课程, 日记 (留空则扫描整个库)") },
-                        supportingText = { Text("只扫描库内指定子文件夹，极大提升扫描速度与性能") },
+                        label = { Text("第三步：调用的数据文件夹路径 (支持多选，逗号隔开)") },
+                        placeholder = { Text("例如: 日历, 01_Daily/日历, Work/课程 (留空则扫描整个库)") },
+                        supportingText = { Text("支持包含完整层级的子路径（如 01_Daily/日历）或绝对路径。本地依据真实路径扫描，打开时自动转为 Obsidian 相对路径") },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Spacer(modifier = Modifier.height(6.dp))
@@ -259,7 +258,9 @@ fun SettingsScreen(
                             onClick = { subFolderPicker.launch(null) },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("+ 选取添加子文件夹")
+                            Icon(Icons.Default.FolderOpen, contentDescription = null)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("+ 选取并解析子路径")
                         }
                     }
 
@@ -287,7 +288,15 @@ fun SettingsScreen(
                 }
 
                 // 正规相对路径协议跳转效果预览
-                val sampleRelPath = if (dataFolders.isNotBlank()) "${dataFolders.split(",", "，").first().trim()}/示例日程.md" else "示例日程.md"
+                val rawFirstFolder = dataFolders.split(",", "，").firstOrNull { it.isNotBlank() }?.trim() ?: ""
+                val sampleRelPath = if (rawFirstFolder.isNotBlank()) {
+                    val cleanSub = rawFirstFolder.removePrefix("/storage/emulated/0/")
+                        .substringAfterLast(":")
+                        .removePrefix("/")
+                    "$cleanSub/示例日程.md"
+                } else {
+                    "示例日程.md"
+                }
                 val sampleVaultName = obsidianVault.ifBlank { "库名" }
                 Surface(
                     color = MaterialTheme.colorScheme.surface,
@@ -302,7 +311,7 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(vertical = 2.dp)
                         )
-                        Text("👉 使用 Obsidian 库内纯净相对路径，杜绝移动端完整绝对路径造成的找不到笔记问题。", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
+                        Text("👉 无论本地扫描时使用多级子路径还是绝对路径，在点击打开笔记时，系统均自动转换为上方正规 Obsidian 库内相对路径，彻底解决找不到笔记问题。", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
                     }
                 }
             }
@@ -485,5 +494,67 @@ fun SettingsScreen(
             Text("保存并重新扫描数据")
         }
     }
+}
+
+/**
+ * 智能解析 SAF 选取的子文件夹路径
+ * 若所选文件夹位于当前 Vault 根目录下，自动提取包含多级目录的相对子路径 (如 "01_Daily/日历")；
+ * 若不在当前库下，返回完整绝对物理路径或存储路径，绝不丢失任何父级路径层级。
+ *
+ * Resolve SAF selected sub-folder path, extracting accurate relative sub-path or absolute path
+ */
+private fun resolveSubFolderPath(subUri: Uri, currentVaultPath: String, vaultName: String): String {
+    val decoded = Uri.decode(subUri.toString())
+
+    // 1. 提取 subUri 中的文档路径部分 (例如 Documents/Obsidian/MyVault/01_Daily/日历)
+    val docPath = if (decoded.contains("tree/")) {
+        val treePart = decoded.substringAfter("tree/")
+        if (treePart.contains(":")) treePart.substringAfter(":") else treePart
+    } else if (decoded.contains(":")) {
+        decoded.substringAfter(":")
+    } else {
+        decoded.substringAfterLast("://")
+    }.replace("\\", "/").trim().removePrefix("/").removeSuffix("/")
+
+    // 2. 尝试从已配置的 currentVaultPath 中提取库根路径
+    val vaultRootDocPath = if (currentVaultPath.startsWith("content://")) {
+        val decodedRoot = Uri.decode(currentVaultPath)
+        if (decodedRoot.contains("tree/")) {
+            val rootTree = decodedRoot.substringAfter("tree/")
+            if (rootTree.contains(":")) rootTree.substringAfter(":") else rootTree
+        } else if (decodedRoot.contains(":")) {
+            decodedRoot.substringAfter(":")
+        } else {
+            decodedRoot.substringAfterLast("://")
+        }
+    } else if (currentVaultPath.isNotBlank()) {
+        currentVaultPath.removePrefix("/storage/emulated/0/")
+            .removePrefix("/sdcard/")
+            .removePrefix("/")
+    } else {
+        ""
+    }.replace("\\", "/").trim().removePrefix("/").removeSuffix("/")
+
+    // 3. 对比：如果子路径以库根路径开头，则提取完整的库内相对子路径 (例如 "01_Daily/日历")
+    if (vaultRootDocPath.isNotBlank() && docPath.startsWith(vaultRootDocPath, ignoreCase = true)) {
+        val rel = docPath.substring(vaultRootDocPath.length).removePrefix("/").removeSuffix("/")
+        if (rel.isNotBlank()) return rel
+    }
+
+    // 4. 对比库名：如果包含 "库名/"，截取库名后的完整相对子路径 (例如 "01_Daily/日历")
+    val vName = vaultName.trim()
+    if (vName.isNotBlank() && docPath.contains("$vName/", ignoreCase = true)) {
+        val rel = docPath.substringAfter("$vName/", "").removePrefix("/").removeSuffix("/")
+        if (rel.isNotBlank()) return rel
+    }
+
+    // 5. 若不在当前库根目录下，且属于 primary 分区，还原为完整标准绝对物理路径
+    if (decoded.contains("primary:")) {
+        val subP = decoded.substringAfter("primary:").removePrefix("/")
+        return "/storage/emulated/0/$subP"
+    }
+
+    // 6. 兜底返回 docPath (保留完整目录层级，绝不丢弃父级路径)
+    return if (docPath.isNotBlank()) docPath else subUri.toString()
 }
 

@@ -250,10 +250,41 @@ class StorageManager(private val context: Context) {
                     val rootDoc = DocumentFile.fromTreeUri(context, rootUri)
                     if (rootDoc != null && rootDoc.isDirectory) {
                         if (dataFolderList.isNotEmpty()) {
-                            for (folderName in dataFolderList) {
-                                val targetDir = findSubDocumentDir(rootDoc, folderName)
-                                if (targetDir != null && targetDir.isDirectory) {
-                                    scanDocumentDir(targetDir, settings, todayMidnight, todayStr, events, tasks, habits, folderName) {
+                            for (folderItem in dataFolderList) {
+                                // 1.1 若为独立 SAF URI
+                                if (folderItem.startsWith("content://")) {
+                                    try {
+                                        val subDoc = DocumentFile.fromTreeUri(context, Uri.parse(folderItem))
+                                        if (subDoc != null && subDoc.isDirectory) {
+                                            val relName = subDoc.name ?: ""
+                                            scanDocumentDir(subDoc, settings, todayMidnight, todayStr, events, tasks, habits, relName) {
+                                                scannedFilesCount++
+                                            }
+                                            continue
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+
+                                // 1.2 若为绝对物理路径且本地可直接访问
+                                if ((folderItem.startsWith("/storage/") || folderItem.startsWith("/sdcard/")) && File(folderItem).isDirectory) {
+                                    val targetLocal = File(folderItem)
+                                    val relParent = extractVaultRelativePath(targetLocal.absolutePath, settings)
+                                    scanLocalDir(targetLocal, targetLocal.parentFile ?: targetLocal, settings, todayMidnight, todayStr, events, tasks, habits, fallbackRelativeParent = relParent) {
+                                        scannedFilesCount++
+                                    }
+                                    continue
+                                }
+
+                                // 1.3 相对子路径 (如 "01_Daily/日历") 或绝对路径转库内相对子路径
+                                val relSubPath = if (folderItem.startsWith("/storage/") || folderItem.startsWith("/sdcard/")) {
+                                    extractVaultRelativePath(folderItem, settings)
+                                } else {
+                                    folderItem
+                                }
+
+                                val found = findSubDocumentDir(rootDoc, relSubPath)
+                                if (found != null && found.first.isDirectory) {
+                                    scanDocumentDir(found.first, settings, todayMidnight, todayStr, events, tasks, habits, found.second) {
                                         scannedFilesCount++
                                     }
                                 }
@@ -271,10 +302,10 @@ class StorageManager(private val context: Context) {
                     val rootDir = File(vaultRoot)
                     if (rootDir.exists() && rootDir.isDirectory) {
                         if (dataFolderList.isNotEmpty()) {
-                            for (folderName in dataFolderList) {
-                                val targetDir = if (folderName.startsWith("/")) File(folderName) else File(rootDir, folderName)
-                                if (targetDir.exists() && targetDir.isDirectory) {
-                                    scanLocalDir(targetDir, rootDir, settings, todayMidnight, todayStr, events, tasks, habits) {
+                            for (folderItem in dataFolderList) {
+                                val found = findLocalSubDir(rootDir, folderItem)
+                                if (found != null && found.first.exists() && found.first.isDirectory) {
+                                    scanLocalDir(found.first, rootDir, settings, todayMidnight, todayStr, events, tasks, habits, fallbackRelativeParent = found.second) {
                                         scannedFilesCount++
                                     }
                                 }
@@ -305,8 +336,8 @@ class StorageManager(private val context: Context) {
             }
         }
 
-        // 去重与排序
-        val distinctEvents = events.distinctBy { "${it.title}_${it.start}_${it.end}" }.sortedBy { it.start }
+        // 去重与排序 (包含相对路径以避免同名跨目录被误去重)
+        val distinctEvents = events.distinctBy { "${it.title}_${it.start}_${it.end}_${it.vaultRelativePath}" }.sortedBy { it.start }
         val distinctTasks = tasks.distinctBy { it.id }
         val distinctHabits = habits.distinctBy { it.id }
 
@@ -323,14 +354,90 @@ class StorageManager(private val context: Context) {
         return Triple(distinctEvents, distinctTasks, distinctHabits)
     }
 
-    private fun findSubDocumentDir(root: DocumentFile, subPath: String): DocumentFile? {
-        val parts = subPath.split("/").map { it.trim() }.filter { it.isNotEmpty() }
+    /**
+     * 在 SAF DocumentFile 树中根据多层相对子路径 (如 "01_Daily/日历") 查找目标目录
+     * 若直接层级未命中，进行有限深度递归探测以兼容用户简写或深层目录
+     */
+    private fun findSubDocumentDir(root: DocumentFile, subPath: String): Pair<DocumentFile, String>? {
+        val cleanSubPath = subPath.replace("\\", "/").trim().removePrefix("/").removeSuffix("/")
+        if (cleanSubPath.isBlank()) return Pair(root, "")
+
+        val parts = cleanSubPath.split("/").map { it.trim() }.filter { it.isNotEmpty() }
         var current: DocumentFile? = root
         for (part in parts) {
             current = current?.listFiles()?.firstOrNull { it.isDirectory && it.name.equals(part, ignoreCase = true) }
             if (current == null) break
         }
-        return current
+        if (current != null && current.isDirectory) {
+            return Pair(current, cleanSubPath)
+        }
+
+        // 深度递归探测 (向下探测最多 3 层)，寻找与目标目录名匹配的子文件夹
+        val targetName = parts.last()
+        return findDocumentDirDeep(root, targetName, currentRelPath = "", maxDepth = 3)
+    }
+
+    private fun findDocumentDirDeep(dir: DocumentFile, targetName: String, currentRelPath: String, maxDepth: Int): Pair<DocumentFile, String>? {
+        if (maxDepth <= 0) return null
+        val files = dir.listFiles()
+        for (f in files) {
+            if (f.isDirectory) {
+                val fName = f.name ?: continue
+                if (shouldIgnoreDirectory(fName)) continue
+                val rel = if (currentRelPath.isBlank()) fName else "$currentRelPath/$fName"
+                if (fName.equals(targetName, ignoreCase = true)) {
+                    return Pair(f, rel)
+                }
+                val sub = findDocumentDirDeep(f, targetName, rel, maxDepth - 1)
+                if (sub != null) return sub
+            }
+        }
+        return null
+    }
+
+    /**
+     * 在本地文件系统下查找子目录，支持绝对路径、多层相对路径及深度探测兜底
+     */
+    private fun findLocalSubDir(rootDir: File, folderPath: String): Pair<File, String>? {
+        val cleanPath = folderPath.replace("\\", "/").trim()
+        // 1. 若为绝对路径
+        if (cleanPath.startsWith("/storage/") || cleanPath.startsWith("/sdcard/") || File(cleanPath).isAbsolute) {
+            val f = File(cleanPath)
+            if (f.exists() && f.isDirectory) {
+                val rel = f.relativeToOrNull(rootDir)?.path?.replace("\\", "/")?.removePrefix("/") ?: f.name
+                return Pair(f, rel)
+            }
+        }
+
+        // 2. 相对路径 (如 "01_Daily/日历" 或 "日历")
+        val cleanRel = cleanPath.removePrefix("/").removeSuffix("/")
+        val target = File(rootDir, cleanRel)
+        if (target.exists() && target.isDirectory) {
+            return Pair(target, cleanRel)
+        }
+
+        // 3. 深度探测兜底 (防止用户只写单个名称，但实际存在于子目录如 "01_Daily/日历")
+        val targetName = cleanRel.substringAfterLast("/")
+        val deepFound = findLocalDirDeep(rootDir, targetName, maxDepth = 3)
+        if (deepFound != null) {
+            val rel = deepFound.relativeToOrNull(rootDir)?.path?.replace("\\", "/")?.removePrefix("/") ?: deepFound.name
+            return Pair(deepFound, rel)
+        }
+
+        return null
+    }
+
+    private fun findLocalDirDeep(dir: File, targetName: String, maxDepth: Int): File? {
+        if (maxDepth <= 0) return null
+        val subDirs = dir.listFiles { f -> f.isDirectory && !shouldIgnoreDirectory(f.name) } ?: return null
+        for (sub in subDirs) {
+            if (sub.name.equals(targetName, ignoreCase = true)) {
+                return sub
+            }
+            val found = findLocalDirDeep(sub, targetName, maxDepth - 1)
+            if (found != null) return found
+        }
+        return null
     }
 
     private fun scanLocalDir(
@@ -342,6 +449,7 @@ class StorageManager(private val context: Context) {
         events: MutableList<CalendarEvent>,
         tasks: MutableList<TaskItem>,
         habits: MutableList<HabitItem>,
+        fallbackRelativeParent: String = "",
         onFileScanned: () -> Unit
     ) {
         dir.walkTopDown()
@@ -350,7 +458,19 @@ class StorageManager(private val context: Context) {
             .forEach { file ->
                 onFileScanned()
                 try {
-                    val relPath = file.relativeToOrNull(vaultRoot)?.path?.replace("\\", "/")?.removePrefix("/") ?: file.name
+                    val computedRel = file.relativeToOrNull(vaultRoot)?.path?.replace("\\", "/")?.removePrefix("/")
+                    val relPath = if (!computedRel.isNullOrBlank() && !computedRel.startsWith("..")) {
+                        computedRel
+                    } else if (fallbackRelativeParent.isNotBlank()) {
+                        val subRel = file.relativeToOrNull(dir)?.path?.replace("\\", "/")?.removePrefix("/") ?: file.name
+                        if (subRel.isBlank() || subRel == file.name) {
+                            if (fallbackRelativeParent.endsWith(file.name)) fallbackRelativeParent else "$fallbackRelativeParent/${file.name}"
+                        } else {
+                            "$fallbackRelativeParent/$subRel"
+                        }
+                    } else {
+                        extractVaultRelativePath(file.absolutePath, settings)
+                    }
                     val text = file.readText()
                     val (fm, body) = FrontmatterScanner.extractFrontmatterAndBody(text)
                     if (fm.isNotEmpty()) {

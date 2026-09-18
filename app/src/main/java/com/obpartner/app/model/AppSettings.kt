@@ -44,11 +44,22 @@ data class AppSettings(
 
     /**
      * 获取配置的调用的数据文件夹列表 (按逗号、分号或换行拆分)
+     * 支持包含层级的相对子路径 (如 "01_Daily/日历")、绝对物理路径 (如 "/storage/emulated/0/...") 及 SAF URI
      */
     fun getDataFolderList(): List<String> {
         if (dataFolders.isBlank()) return emptyList()
         return dataFolders.split(",", "，", ";", "；", "\n")
-            .map { it.trim().removePrefix("/").removeSuffix("/") }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { item ->
+                if (item.startsWith("/storage/") || item.startsWith("/sdcard/")) {
+                    item.removeSuffix("/")
+                } else if (item.startsWith("content://")) {
+                    item
+                } else {
+                    item.removePrefix("/").removeSuffix("/")
+                }
+            }
             .filter { it.isNotEmpty() }
     }
 }

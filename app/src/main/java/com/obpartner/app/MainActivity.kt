@@ -197,7 +197,9 @@ fun MainAppScreen() {
                     TodayTasksScreen(
                         tasks = tasks,
                         habits = habits,
-                        onTaskUpdated = { refreshData() }
+                        onTaskUpdated = {
+                            tasks = storageManager.getCachedTasksFast()
+                        }
                     )
                 }
                 2 -> {

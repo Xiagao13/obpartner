@@ -50,7 +50,9 @@ class CalendarActionReceiver : BroadcastReceiver() {
         const val ACTION_NAV_NEXT = "com.obpartner.app.ACTION_CALENDAR_NAV_NEXT"
         const val ACTION_RESET_TODAY = "com.obpartner.app.ACTION_CALENDAR_RESET_TODAY"
         const val ACTION_SET_VIEW = "com.obpartner.app.ACTION_CALENDAR_SET_VIEW"
+        const val ACTION_SELECT_DAY = "com.obpartner.app.ACTION_CALENDAR_SELECT_DAY"
         const val EXTRA_VIEW_MODE = "extra_view_mode"
+        const val EXTRA_DATE_TIMESTAMP = "extra_date_timestamp"
 
         fun createNavPrevIntent(context: Context): Intent = Intent(context, CalendarActionReceiver::class.java).apply {
             action = ACTION_NAV_PREV
@@ -67,6 +69,11 @@ class CalendarActionReceiver : BroadcastReceiver() {
         fun createSetViewIntent(context: Context, mode: String): Intent = Intent(context, CalendarActionReceiver::class.java).apply {
             action = ACTION_SET_VIEW
             putExtra(EXTRA_VIEW_MODE, mode)
+        }
+
+        fun createSelectDayIntent(context: Context, timestamp: Long): Intent = Intent(context, CalendarActionReceiver::class.java).apply {
+            action = ACTION_SELECT_DAY
+            putExtra(EXTRA_DATE_TIMESTAMP, timestamp)
         }
     }
 
@@ -109,13 +116,33 @@ class CalendarActionReceiver : BroadcastReceiver() {
                     .remove("global_calendar_selected_day")
                     .commit()
             }
+            ACTION_SELECT_DAY -> {
+                val timestamp = intent.getLongExtra(EXTRA_DATE_TIMESTAMP, 0L)
+                if (timestamp > 0L) {
+                    prefs.edit().putLong("global_calendar_selected_day", timestamp).commit()
+                } else {
+                    prefs.edit().remove("global_calendar_selected_day").commit()
+                }
+            }
         }
 
-        // 立即触发全量微件统一刷新
-        CoroutineScope(Dispatchers.Main).launch {
-            try { CalendarWidget3x2().updateAll(context) } catch (_: Exception) {}
-            try { CalendarWidget2x3().updateAll(context) } catch (_: Exception) {}
-            try { CalendarWidget2x2().updateAll(context) } catch (_: Exception) {}
+        // 清理所有历史遗留的前缀 key，避免旧缓存覆盖新状态
+        val editor = prefs.edit()
+        prefs.all.keys.filter { !it.startsWith("global_") }.forEach { editor.remove(it) }
+        editor.commit()
+
+        // 异步等待全量微件渲染并向 Launcher 提交 RemoteViews
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                CalendarWidget3x2().updateAll(context)
+                CalendarWidget2x3().updateAll(context)
+                CalendarWidget2x2().updateAll(context)
+            } catch (e: Exception) {
+                android.util.Log.e("CalendarActionReceiver", "Failed to update widgets", e)
+            } finally {
+                pendingResult.finish()
+            }
         }
     }
 }
@@ -179,6 +206,11 @@ class CalendarNavActionCallback : ActionCallback {
                 }
             }
         }
+
+        // 清理历史残留脏 key
+        val editor = prefs.edit()
+        prefs.all.keys.filter { !it.startsWith("global_") }.forEach { editor.remove(it) }
+        editor.commit()
 
         // 统一全量刷新所有微件，彻底消除单 glanceId 跨类型异常
         try { CalendarWidget3x2().updateAll(context) } catch (_: Exception) {}
@@ -384,6 +416,7 @@ object CalendarWidgetShared {
      */
     @Composable
     fun WeekdaysBar(
+        context: Context,
         weekDates: List<Date>,
         today: Date,
         selectedDate: Date?,
@@ -420,10 +453,10 @@ object CalendarWidgetShared {
                         .background(highlightBg)
                         .cornerRadius(4.dp)
                         .clickable(
-                            actionRunCallback<CalendarNavActionCallback>(
-                                actionParametersOf(
-                                    CalendarNavActionCallback.actionKey to "select_day",
-                                    CalendarNavActionCallback.dateTimestampKey to if (isSelected) 0L else date.time
+                            actionSendBroadcast(
+                                CalendarActionReceiver.createSelectDayIntent(
+                                    context,
+                                    if (isSelected) 0L else date.time
                                 )
                             )
                         ),
@@ -476,6 +509,7 @@ object CalendarWidgetShared {
      */
     @Composable
     fun MonthViewGrid(
+        context: Context,
         cells: List<CalendarUtils.MonthCell>,
         today: Date,
         selectedDate: Date?,
@@ -524,10 +558,10 @@ object CalendarWidgetShared {
                                     .cornerRadius(3.dp)
                                     .padding(vertical = 2.dp)
                                     .clickable(
-                                        actionRunCallback<CalendarNavActionCallback>(
-                                            actionParametersOf(
-                                                CalendarNavActionCallback.actionKey to "select_day",
-                                                CalendarNavActionCallback.dateTimestampKey to if (isSelected) 0L else cell.date.time
+                                        actionSendBroadcast(
+                                            CalendarActionReceiver.createSelectDayIntent(
+                                                context,
+                                                if (isSelected) 0L else cell.date.time
                                             )
                                         )
                                     ),
@@ -660,27 +694,24 @@ class CalendarWidget2x3 : GlanceAppWidget() {
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()
 
-        // 2. 检查是否需要后台异步静默刷新（如果数据为空，或者距离上次全盘扫描超过 5 分钟）
-        val now = System.currentTimeMillis()
-        if (events.isEmpty() || (now - StorageManager.lastScanTimestamp > 5 * 60 * 1000L)) {
+        // 2. 检查是否需要初次装载（仅在缓存数据为空时后台异步获取一次）
+        if (events.isEmpty()) {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 try {
                     val (freshEvents, _, _) = storageManager.scanVault()
-                    if (freshEvents.size != events.size || freshEvents.map { it.id } != events.map { it.id }) {
+                    if (freshEvents.isNotEmpty()) {
                         this@CalendarWidget2x3.update(context, id)
                     }
                 } catch (_: Exception) {}
             }
         }
 
-        // 读取持久化交互状态 (支持全局兜底与实例绑定)
+        // 读取持久化交互状态 (统一步调全局同步，杜绝历史脏 key 覆盖)
         val prefs = context.getSharedPreferences("widget_calendar_state", Context.MODE_PRIVATE)
-        val idStr = id.toString()
-        val viewMode = prefs.getString("${idStr}_view_mode", null)
-            ?: prefs.getString("global_calendar_view_mode", "week") ?: "week"
-        val weekOffset = prefs.getInt("${idStr}_week_offset", prefs.getInt("global_calendar_week_offset", 0))
-        val monthOffset = prefs.getInt("${idStr}_month_offset", prefs.getInt("global_calendar_month_offset", 0))
-        val selectedDayTs = prefs.getLong("${idStr}_selected_day", prefs.getLong("global_calendar_selected_day", 0L))
+        val viewMode = prefs.getString("global_calendar_view_mode", "week") ?: "week"
+        val weekOffset = prefs.getInt("global_calendar_week_offset", 0)
+        val monthOffset = prefs.getInt("global_calendar_month_offset", 0)
+        val selectedDayTs = prefs.getLong("global_calendar_selected_day", 0L)
         val selectedDate = if (selectedDayTs > 0L) Date(selectedDayTs) else null
 
         // 目标周与日期范围
@@ -761,6 +792,7 @@ class CalendarWidget2x3 : GlanceAppWidget() {
                 if (viewMode == "month") {
                     // --- 月视图模式 ---
                     CalendarWidgetShared.MonthViewGrid(
+                        context = context,
                         cells = monthCells,
                         today = today,
                         selectedDate = selectedDate,
@@ -800,6 +832,7 @@ class CalendarWidget2x3 : GlanceAppWidget() {
                 } else {
                     // --- 周视图模式 (结构严格对齐周视图) ---
                     CalendarWidgetShared.WeekdaysBar(
+                        context = context,
                         weekDates = weekDates,
                         today = today,
                         selectedDate = selectedDate,
@@ -912,26 +945,23 @@ class CalendarWidget3x2 : GlanceAppWidget() {
         val today = Date()
         val lunar = LunarHelper.getLunarDetails(today)
 
-        // 2. 检查是否需要后台异步静默刷新（如果数据为空，或者距离上次全盘扫描超过 5 分钟）
-        val now = System.currentTimeMillis()
-        if (events.isEmpty() || (now - StorageManager.lastScanTimestamp > 5 * 60 * 1000L)) {
+        // 2. 检查是否需要初次装载（仅在缓存数据为空时后台异步获取一次）
+        if (events.isEmpty()) {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 try {
                     val (freshEvents, _, _) = storageManager.scanVault()
-                    if (freshEvents.size != events.size || freshEvents.map { it.id } != events.map { it.id }) {
+                    if (freshEvents.isNotEmpty()) {
                         this@CalendarWidget3x2.update(context, id)
                     }
                 } catch (_: Exception) {}
             }
         }
 
-        // 读取持久化交互状态 (支持全局兜底与实例绑定)
+        // 读取持久化交互状态 (统一步调全局同步，杜绝历史脏 key 覆盖)
         val prefs = context.getSharedPreferences("widget_calendar_state", Context.MODE_PRIVATE)
-        val idStr = id.toString()
-        val viewMode = prefs.getString("${idStr}_view_mode", null)
-            ?: prefs.getString("global_calendar_view_mode", "week") ?: "week"
-        val weekOffset = prefs.getInt("${idStr}_week_offset", prefs.getInt("global_calendar_week_offset", 0))
-        val monthOffset = prefs.getInt("${idStr}_month_offset", prefs.getInt("global_calendar_month_offset", 0))
+        val viewMode = prefs.getString("global_calendar_view_mode", "week") ?: "week"
+        val weekOffset = prefs.getInt("global_calendar_week_offset", 0)
+        val monthOffset = prefs.getInt("global_calendar_month_offset", 0)
 
         // 目标周与日期范围
         val targetWeekCal = Calendar.getInstance().apply {
@@ -1123,13 +1153,12 @@ class CalendarWidget2x2 : GlanceAppWidget() {
         val today = Date()
         val lunar = LunarHelper.getLunarDetails(today)
 
-        // 2. 检查是否需要后台异步静默刷新
-        val now = System.currentTimeMillis()
-        if (events.isEmpty() || (now - StorageManager.lastScanTimestamp > 5 * 60 * 1000L)) {
+        // 2. 检查是否需要初次装载（仅在缓存数据为空时后台异步获取一次）
+        if (events.isEmpty()) {
             kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
                 try {
                     val (freshEvents, _, _) = storageManager.scanVault()
-                    if (freshEvents.size != events.size || freshEvents.map { it.id } != events.map { it.id }) {
+                    if (freshEvents.isNotEmpty()) {
                         this@CalendarWidget2x2.update(context, id)
                     }
                 } catch (_: Exception) {}
@@ -1137,8 +1166,7 @@ class CalendarWidget2x2 : GlanceAppWidget() {
         }
 
         val prefs = context.getSharedPreferences("widget_calendar_state", Context.MODE_PRIVATE)
-        val idStr = id.toString()
-        val weekOffset = prefs.getInt("${idStr}_week_offset", prefs.getInt("global_calendar_week_offset", 0))
+        val weekOffset = prefs.getInt("global_calendar_week_offset", 0)
 
         val targetWeekCal = Calendar.getInstance().apply {
             time = today

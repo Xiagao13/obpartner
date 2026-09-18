@@ -109,7 +109,7 @@ fun TodayTasksScreen(
                     task = task,
                     onStatusChange = { isDone ->
                         val newStatus = if (isDone) "Done" else "Todo"
-                        if (MarkdownWriter.updateTaskStatus(File(task.path), newStatus)) {
+                        if (storageManager.updateSingleTaskStatus(task.path, newStatus)) {
                             onTaskUpdated()
                         }
                     },
@@ -143,7 +143,7 @@ fun TodayTasksScreen(
                     task = task,
                     onStatusChange = { isDone ->
                         val newStatus = if (isDone) "Done" else "Todo"
-                        if (MarkdownWriter.updateTaskStatus(File(task.path), newStatus)) {
+                        if (storageManager.updateSingleTaskStatus(task.path, newStatus)) {
                             onTaskUpdated()
                         }
                     },
@@ -169,7 +169,7 @@ fun TodayTasksScreen(
                     task = task,
                     onStatusChange = { isDone ->
                         val newStatus = if (isDone) "Done" else "Todo"
-                        if (MarkdownWriter.updateTaskStatus(File(task.path), newStatus)) {
+                        if (storageManager.updateSingleTaskStatus(task.path, newStatus)) {
                             onTaskUpdated()
                         }
                     },

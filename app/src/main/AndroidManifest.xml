@@ -49,7 +49,7 @@
         <receiver
             android:name=".widget.CalendarActionReceiver"
             android:enabled="true"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="com.obpartner.app.ACTION_CALENDAR_NAV_PREV" />
                 <action android:name="com.obpartner.app.ACTION_CALENDAR_NAV_NEXT" />

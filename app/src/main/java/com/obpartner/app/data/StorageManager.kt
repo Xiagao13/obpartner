@@ -30,6 +30,14 @@ class StorageManager(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("obpartner_prefs", Context.MODE_PRIVATE)
 
+    data class FileCacheEntry(
+        val lastModified: Long,
+        val fileSize: Long,
+        val events: List<CalendarEvent>,
+        val tasks: List<TaskItem>,
+        val habits: List<HabitItem>
+    )
+
     companion object {
         @Volatile
         var cachedEvents: List<CalendarEvent>? = null
@@ -41,11 +49,15 @@ class StorageManager(private val context: Context) {
         var lastScanTimestamp: Long = 0L
         private const val CACHE_VALIDITY_MS = 5 * 60 * 1000L // 5分钟内存缓存 / 5 minutes cache validity
 
+        // 增量文件解析缓存 (记录文件最后修改时间与解析结果，未修改文件 0 耗时跳过)
+        val fileCache = java.util.concurrent.ConcurrentHashMap<String, FileCacheEntry>()
+
         fun invalidateCache() {
             cachedEvents = null
             cachedTasks = null
             cachedHabits = null
             lastScanTimestamp = 0L
+            fileCache.clear()
         }
 
         private fun shouldIgnoreDirectory(dirName: String): Boolean {
@@ -64,14 +76,10 @@ class StorageManager(private val context: Context) {
         private set
 
     /**
-     * 将解析出的日程快照持久化到磁盘，保障桌面微件冷启动毫秒级渲染
-     * Save parsed events snapshot to disk cache for millisecond widget cold start
+     * 将解析出的日程与待办快照持久化到磁盘，保障桌面微件冷启动毫秒级渲染
+     * Save parsed events & tasks snapshot to disk cache for millisecond widget cold start
      */
-    /**
-     * 将解析出的日程快照持久化到磁盘，保障桌面微件冷启动毫秒级渲染
-     * Save parsed events snapshot to disk cache for millisecond widget cold start
-     */
-    private fun saveDiskSnapshot(events: List<CalendarEvent>) {
+    fun saveDiskSnapshot(events: List<CalendarEvent>, tasks: List<TaskItem>? = null) {
         try {
             val arr = JSONArray()
             for (ev in events.take(300)) {
@@ -96,12 +104,32 @@ class StorageManager(private val context: Context) {
                 }
                 arr.put(obj)
             }
-            prefs.edit().putString("disk_cache_events", arr.toString()).commit()
+            val editor = prefs.edit().putString("disk_cache_events", arr.toString())
+
+            val tasksToSave = tasks ?: cachedTasks
+            if (tasksToSave != null) {
+                val tArr = JSONArray()
+                for (t in tasksToSave.take(300)) {
+                    val tObj = JSONObject().apply {
+                        put("id", t.id)
+                        put("title", t.title)
+                        put("path", t.path)
+                        put("status", t.status)
+                        put("priority", t.priority)
+                        put("startDate", t.startDate)
+                        put("dueDate", t.dueDate)
+                        put("vaultRelativePath", t.vaultRelativePath)
+                    }
+                    tArr.put(tObj)
+                }
+                editor.putString("disk_cache_tasks", tArr.toString())
+            }
+            editor.commit()
         } catch (_: Exception) {}
     }
 
     /**
-     * 从磁盘快照读取持久化缓存
+     * 从磁盘快照读取持久化日程缓存
      * Load persisted events snapshot from disk
      */
     private fun loadDiskSnapshot(): List<CalendarEvent> {
@@ -143,8 +171,38 @@ class StorageManager(private val context: Context) {
     }
 
     /**
-     * 极速获取缓存数据（微秒级），供桌面微件首帧直接渲染，绝不阻塞主线程，彻底消除无响应与等待
-     * Fast retrieve cached events (<1ms), for immediate widget rendering without any UI freeze
+     * 从磁盘快照读取持久化任务缓存
+     * Load persisted tasks snapshot from disk
+     */
+    private fun loadDiskTasksSnapshot(): List<TaskItem> {
+        try {
+            val raw = prefs.getString("disk_cache_tasks", null) ?: return emptyList()
+            val arr = JSONArray(raw)
+            val list = mutableListOf<TaskItem>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                list.add(
+                    TaskItem(
+                        id = obj.optString("id"),
+                        title = obj.optString("title"),
+                        path = obj.optString("path"),
+                        status = obj.optString("status", "Todo"),
+                        priority = obj.optString("priority", "Normal"),
+                        startDate = obj.optLong("startDate"),
+                        dueDate = obj.optLong("dueDate"),
+                        vaultRelativePath = obj.optString("vaultRelativePath", "")
+                    )
+                )
+            }
+            return list
+        } catch (_: Exception) {
+            return emptyList()
+        }
+    }
+
+    /**
+     * 极速获取日程缓存数据（微秒级），供桌面微件首帧直接渲染，绝不阻塞主线程
+     * Fast retrieve cached events (<1ms), for immediate widget rendering
      */
     fun getCachedVaultFast(): List<CalendarEvent> {
         val mem = cachedEvents
@@ -157,6 +215,55 @@ class StorageManager(private val context: Context) {
             return disk
         }
         return emptyList()
+    }
+
+    /**
+     * 极速获取任务缓存数据（微秒级），供桌面微件首帧直接渲染，绝不阻塞主线程
+     * Fast retrieve cached tasks (<1ms), for immediate widget rendering
+     */
+    fun getCachedTasksFast(): List<TaskItem> {
+        val mem = cachedTasks
+        if (mem != null) {
+            return mem
+        }
+        val disk = loadDiskTasksSnapshot()
+        if (disk.isNotEmpty()) {
+            cachedTasks = disk
+            return disk
+        }
+        return emptyList()
+    }
+
+    /**
+     * 快速增量更新单项任务状态 (仅耗时毫秒级，修改目标文件、更新内存与磁盘快照并刷新微件，绝不重扫全库)
+     * Fast In-Place Task Status Update
+     */
+    fun updateSingleTaskStatus(taskPath: String, newStatus: String): Boolean {
+        val file = File(taskPath)
+        val success = if (file.exists()) {
+            com.obpartner.app.parser.MarkdownWriter.updateTaskStatus(file, newStatus)
+        } else false
+
+        if (success) {
+            val currentTasks = cachedTasks ?: emptyList()
+            val updatedTasks = currentTasks.map {
+                if (it.path == taskPath) it.copy(status = newStatus) else it
+            }
+            cachedTasks = updatedTasks
+            fileCache.remove(taskPath)
+            saveDiskSnapshot(cachedEvents ?: emptyList(), updatedTasks)
+            notifyTasksWidgetsUpdate()
+        }
+        return success
+    }
+
+    fun notifyTasksWidgetsUpdate() {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            try { com.obpartner.app.widget.TodayTasksWidget3x2().updateAll(context) } catch (_: Exception) {}
+            try { com.obpartner.app.widget.TodayTasksWidget2x2().updateAll(context) } catch (_: Exception) {}
+            try { com.obpartner.app.widget.TodayTasksWidget().updateAll(context) } catch (_: Exception) {}
+            try { com.obpartner.app.widget.TodayTasksWidget4x2().updateAll(context) } catch (_: Exception) {}
+        }
     }
 
     fun getSettings(): AppSettings {
@@ -458,6 +565,16 @@ class StorageManager(private val context: Context) {
             .forEach { file ->
                 onFileScanned()
                 try {
+                    val lm = file.lastModified()
+                    val sz = file.length()
+                    val cachedEntry = fileCache[file.absolutePath]
+                    if (cachedEntry != null && cachedEntry.lastModified == lm && cachedEntry.fileSize == sz) {
+                        events.addAll(cachedEntry.events)
+                        tasks.addAll(cachedEntry.tasks)
+                        habits.addAll(cachedEntry.habits)
+                        return@forEach
+                    }
+
                     val computedRel = file.relativeToOrNull(vaultRoot)?.path?.replace("\\", "/")?.removePrefix("/")
                     val relPath = if (!computedRel.isNullOrBlank() && !computedRel.startsWith("..")) {
                         computedRel
@@ -473,19 +590,28 @@ class StorageManager(private val context: Context) {
                     }
                     val text = file.readText()
                     val (fm, body) = FrontmatterScanner.extractFrontmatterAndBody(text)
+                    val fEvents = mutableListOf<CalendarEvent>()
+                    val fTasks = mutableListOf<TaskItem>()
+                    val fHabits = mutableListOf<HabitItem>()
+
                     if (fm.isNotEmpty()) {
                         MarkdownEventScanner.parseEvent(file.absolutePath, file.name, fm, settings, relativePath = relPath)?.let {
-                            events.add(it)
+                            fEvents.add(it)
                         }
                         MarkdownTaskScanner.parseTask(file.absolutePath, file.name, fm, settings, todayMidnight, relativePath = relPath)?.let {
-                            tasks.add(it)
+                            fTasks.add(it)
                         }
                         MarkdownTaskScanner.parseHabit(file.absolutePath, file.name, fm, todayStr, relativePath = relPath)?.let {
-                            habits.add(it)
+                            fHabits.add(it)
                         }
                     }
                     val bodyEvents = MarkdownEventScanner.parseBodyEvents(file.absolutePath, file.name, body, fm, settings, relativePath = relPath)
-                    events.addAll(bodyEvents)
+                    fEvents.addAll(bodyEvents)
+
+                    fileCache[file.absolutePath] = FileCacheEntry(lm, sz, fEvents, fTasks, fHabits)
+                    events.addAll(fEvents)
+                    tasks.addAll(fTasks)
+                    habits.addAll(fHabits)
                 } catch (_: Exception) {}
             }
     }
@@ -512,25 +638,43 @@ class StorageManager(private val context: Context) {
             } else if (doc.isFile && (docName.endsWith(".md", ignoreCase = true) || docName.endsWith(".markdown", ignoreCase = true))) {
                 onFileScanned()
                 try {
+                    val path = doc.uri.toString()
+                    val lm = doc.lastModified()
+                    val sz = doc.length()
+                    val cachedEntry = fileCache[path]
+                    if (cachedEntry != null && cachedEntry.lastModified == lm && cachedEntry.fileSize == sz) {
+                        events.addAll(cachedEntry.events)
+                        tasks.addAll(cachedEntry.tasks)
+                        habits.addAll(cachedEntry.habits)
+                        continue
+                    }
+
                     val relPath = if (relativeParent.isBlank()) docName else "$relativeParent/$docName"
                     context.contentResolver.openInputStream(doc.uri)?.use { stream ->
                         val text = stream.bufferedReader().use { it.readText() }
                         val (fm, body) = FrontmatterScanner.extractFrontmatterAndBody(text)
-                        val path = doc.uri.toString()
+                        val fEvents = mutableListOf<CalendarEvent>()
+                        val fTasks = mutableListOf<TaskItem>()
+                        val fHabits = mutableListOf<HabitItem>()
 
                         if (fm.isNotEmpty()) {
                             MarkdownEventScanner.parseEvent(path, docName, fm, settings, relativePath = relPath)?.let {
-                                events.add(it)
+                                fEvents.add(it)
                             }
                             MarkdownTaskScanner.parseTask(path, docName, fm, settings, todayMidnight, relativePath = relPath)?.let {
-                                tasks.add(it)
+                                fTasks.add(it)
                             }
                             MarkdownTaskScanner.parseHabit(path, docName, fm, todayStr, relativePath = relPath)?.let {
-                                habits.add(it)
+                                fHabits.add(it)
                             }
                         }
                         val bodyEvents = MarkdownEventScanner.parseBodyEvents(path, docName, body, fm, settings, relativePath = relPath)
-                        events.addAll(bodyEvents)
+                        fEvents.addAll(bodyEvents)
+
+                        fileCache[path] = FileCacheEntry(lm, sz, fEvents, fTasks, fHabits)
+                        events.addAll(fEvents)
+                        tasks.addAll(fTasks)
+                        habits.addAll(fHabits)
                     }
                 } catch (_: Exception) {}
             }

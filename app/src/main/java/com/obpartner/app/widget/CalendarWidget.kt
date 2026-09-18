@@ -188,7 +188,16 @@ class CalendarNavActionCallback : ActionCallback {
 }
 
 /**
- * 桌面日历微件公共组    @Composable
+ * 桌面日历微件公共组件与方法
+ * Shared Components and Utilities for Desktop Calendar Widgets
+ */
+object CalendarWidgetShared {
+
+    /**
+     * 柔光玻璃拟态微件外层容器 (Freepace 现代冷透微晶高光圆角)
+     * Frosted Glassmorphism Outer Container
+     */
+    @Composable
     fun GlassContainer(
         theme: WidgetThemeConfig,
         content: @Composable ColumnScope.() -> Unit
@@ -340,14 +349,6 @@ class CalendarNavActionCallback : ActionCallback {
                         Text(
                             text = "月",
                             style = TextStyle(
-                                color = ColorProvider(if (viewMode == "month") Color.White else theme.subText),
-                                fontSize = 11.sp,
-                                fontWeight = if (viewMode == "month") FontWeight.Bold else FontWeight.Normal
-                            )
-                        )
-                    }
-                }
-            }                          style = TextStyle(
                                 color = ColorProvider(if (viewMode == "month") Color.White else theme.subText),
                                 fontSize = 11.sp,
                                 fontWeight = if (viewMode == "month") FontWeight.Bold else FontWeight.Normal

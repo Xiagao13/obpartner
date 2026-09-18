@@ -132,18 +132,18 @@ object ColorUtils {
                 glassBorder = Color(0x33CBD5E1),
                 dividerColor = Color(0x20000000)
             )
-            else -> WidgetThemeConfig( // 默认 "glass"：柔光磨砂玻璃质感，透出手机桌面壁纸
+            else -> WidgetThemeConfig( // 默认 "glass"：对齐 Freepace 现代柔光冷透玻璃风格
                 id = "glass",
                 name = "柔光玻璃",
-                widgetBg = Color(0xB3151828), // 70% 柔光暗晶透光
-                cardBg = Color(0x4D2A2E48),   // 30% 半透明卡片
-                headerText = Color(0xFFFFFFFF),
-                subText = Color(0xFFCBD5E1),
+                widgetBg = Color(0x8C111628), // 55% 深度冷光暗晶通透底色，透显壁纸兼具阅读对比度
+                cardBg = Color(0x33262E48),   // 柔光微透卡片底色，营造错落有致的玻璃景深
+                headerText = Color(0xFFFFFFFF),// 纯净高亮白
+                subText = Color(0xFF94A3B8),  // 冷霜蓝灰 (Slate 400)，精致柔和
                 dateNumText = Color(0xFFFFFFFF),
-                accent = Color(0xFF9D84F6),
-                highlight = Color(0xFF6EE7B7),
-                glassBorder = Color(0x2EFFFFFF), // 柔白高光微边框
-                dividerColor = Color(0x24FFFFFF)
+                accent = Color(0xFF8B5CF6),   // Freepace 标志性紫晶色 (Violet 500)
+                highlight = Color(0xFF10B981),// 翡翠极光绿 (Emerald 500)
+                glassBorder = Color(0x40FFFFFF), // 25% 柔白晶莹高光微边框
+                dividerColor = Color(0x1FFFFFFF) // 细高光分割线
             )
         }
     }

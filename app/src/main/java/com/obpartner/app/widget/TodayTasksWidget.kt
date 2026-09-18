@@ -54,14 +54,14 @@ object TodayTasksWidgetShared {
             modifier = GlanceModifier
                 .fillMaxSize()
                 .background(theme.glassBorder)
-                .cornerRadius(16.dp)
+                .cornerRadius(18.dp)
                 .padding(1.dp)
         ) {
             Column(
                 modifier = GlanceModifier
                     .fillMaxSize()
                     .background(theme.widgetBg)
-                    .cornerRadius(15.dp)
+                    .cornerRadius(17.dp)
                     .padding(8.dp),
                 content = content
             )

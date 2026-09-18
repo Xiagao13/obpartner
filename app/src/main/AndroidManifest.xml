@@ -45,6 +45,19 @@
             </intent-filter>
         </receiver>
 
+        <!-- 桌面日历交互显式广播接收器 (100% 防拦截，毫秒级响应翻页与周月切换) -->
+        <receiver
+            android:name=".widget.CalendarActionReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.obpartner.app.ACTION_CALENDAR_NAV_PREV" />
+                <action android:name="com.obpartner.app.ACTION_CALENDAR_NAV_NEXT" />
+                <action android:name="com.obpartner.app.ACTION_CALENDAR_RESET_TODAY" />
+                <action android:name="com.obpartner.app.ACTION_CALENDAR_SET_VIEW" />
+            </intent-filter>
+        </receiver>
+
         <!-- 桌面日历组件 3×2 (横版主推) -->
         <receiver
             android:name=".widget.CalendarWidget3x2Receiver"

@@ -205,7 +205,7 @@ class TodayTasksWidget3x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (_, tasks, _) = storageManager.scanVault()
+        val (_, tasks, _) = storageManager.getCachedVault()
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
 
@@ -279,7 +279,7 @@ class TodayTasksWidget2x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (_, tasks, _) = storageManager.scanVault()
+        val (_, tasks, _) = storageManager.getCachedVault()
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
 
@@ -347,7 +347,7 @@ class TodayTasksWidget4x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (_, tasks, _) = storageManager.scanVault()
+        val (_, tasks, _) = storageManager.getCachedVault()
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
 

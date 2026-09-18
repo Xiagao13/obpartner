@@ -564,7 +564,7 @@ class CalendarWidget2x3 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (events, _, _) = storageManager.scanVault()
+        val (events, _, _) = storageManager.getCachedVault()
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()
@@ -782,7 +782,7 @@ class CalendarWidget3x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (events, _, _) = storageManager.scanVault()
+        val (events, _, _) = storageManager.getCachedVault()
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()
@@ -957,7 +957,7 @@ class CalendarWidget2x2 : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val storageManager = StorageManager(context)
-        val (events, _, _) = storageManager.scanVault()
+        val (events, _, _) = storageManager.getCachedVault()
         val settings = storageManager.getSettings()
         val theme = ColorUtils.getWidgetTheme(settings.widgetTheme)
         val today = Date()

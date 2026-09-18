@@ -48,6 +48,35 @@ object FrontmatterScanner {
         val yamlContent = yamlBuilder.toString()
         if (yamlContent.isBlank()) return emptyMap()
 
+        return parseYamlMap(yamlContent)
+    }
+
+    /**
+     * 从完整 Markdown 文本中分离 Frontmatter 字典与正文
+     * Extract Frontmatter map and body content from full Markdown text
+     */
+    fun extractFrontmatterAndBody(fullText: String): Pair<Map<String, Any>, String> {
+        val trimmed = fullText.trimStart()
+        if (!trimmed.startsWith("---")) {
+            return Pair(emptyMap(), fullText)
+        }
+
+        // 寻找第二个 --- 闭合标签
+        val secondDashIndex = trimmed.indexOf("\n---", startIndex = 3)
+        if (secondDashIndex == -1) {
+            return Pair(emptyMap(), fullText)
+        }
+
+        val yamlContent = trimmed.substring(3, secondDashIndex).trim()
+        val afterClosing = trimmed.substring(secondDashIndex + 4)
+        val bodyContent = if (afterClosing.startsWith("\n")) afterClosing.substring(1) else afterClosing
+
+        val fm = parseYamlMap(yamlContent)
+        return Pair(fm, bodyContent)
+    }
+
+    private fun parseYamlMap(yamlContent: String): Map<String, Any> {
+        if (yamlContent.isBlank()) return emptyMap()
         return try {
             val loaded = yaml.load<Any>(yamlContent)
             if (loaded is Map<*, *>) {

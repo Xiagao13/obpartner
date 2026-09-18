@@ -44,7 +44,11 @@ object CalendarUtils {
         SimpleDateFormat("MM/dd HH:mm", Locale.getDefault()),
         SimpleDateFormat("MM/dd", Locale.getDefault()),
         SimpleDateFormat("M月d日 HH:mm", Locale.getDefault()),
-        SimpleDateFormat("M月d日", Locale.getDefault())
+        SimpleDateFormat("M月d日", Locale.getDefault()),
+        // 兼容紧凑 8 位年月日及时间 (如 20250702, 202507021100)
+        SimpleDateFormat("yyyyMMdd'T'HHmm", Locale.getDefault()),
+        SimpleDateFormat("yyyyMMdd HHmm", Locale.getDefault()),
+        SimpleDateFormat("yyyyMMdd", Locale.getDefault())
     )
 
     /**
@@ -119,6 +123,14 @@ object CalendarUtils {
         if (matcher.find()) {
             return matcher.group(1)?.replace('/', '-')?.replace('.', '-')
         }
+        // 兼容紧凑 8 位日期 (如 20250702王佳玥.md -> 2025-07-02)
+        val compactMatcher = Pattern.compile("(?:^|[^\\d])((?:19|20)\\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])(?:[^\\d]|$)").matcher(text)
+        if (compactMatcher.find()) {
+            val y = compactMatcher.group(1)
+            val m = compactMatcher.group(2)
+            val d = compactMatcher.group(3)
+            return "$y-$m-$d"
+        }
         // 兼容无年份的文件名 (如 "09-18.md", "9-18 会议.md")，自动赋予当前年份
         val shortMatcher = Pattern.compile("(?:^|[^\\d])(\\d{1,2}[-/.]\\d{1,2})(?:[^\\d]|$)").matcher(text)
         if (shortMatcher.find()) {
@@ -157,13 +169,15 @@ object CalendarUtils {
     }
 
     /**
-     * 判断字符串是否包含时间段（如 "20:45 - 22:45" 或 "20:45~22:45"）并拆分
-     * Check if string contains a time range and split into start and end time
+     * 判断字符串是否包含时间段（如 "20:45 - 22:45" 或 "8:30-10:30" 或 "11:00~13:00"）并安全拆分
+     * Check if string contains a time range and safely split into start and end time without breaking ISO dates (e.g. 2025-07-02)
      */
     fun splitTimeRange(raw: String): Pair<String, String?> {
         val trimmed = raw.trim().replace("\"", "").replace("'", "")
-        val delimiters = arrayOf(" - ", "-", " ~ ", "~", " – ", "—")
-        for (delim in delimiters) {
+
+        // 1. 显式带有空格或明确连接词的时间段分隔符: " - ", " ~ ", " – ", " — ", " 至 ", " to "
+        val explicitDelimiters = arrayOf(" - ", " ~ ", " – ", " — ", " 至 ", " to ")
+        for (delim in explicitDelimiters) {
             if (trimmed.contains(delim)) {
                 val parts = trimmed.split(delim, limit = 2)
                 if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
@@ -171,6 +185,24 @@ object CalendarUtils {
                 }
             }
         }
+
+        // 2. 纯波浪号或中文“至”等无空格分隔: "11:00~13:00", "11:00至13:00"
+        for (delim in arrayOf("~", "至", "–", "—")) {
+            if (trimmed.contains(delim)) {
+                val parts = trimmed.split(delim, limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
+                    return Pair(parts[0].trim(), parts[1].trim())
+                }
+            }
+        }
+
+        // 3. 紧凑时间段格式 "8:30-10:30" (两端严格要求为 HH:mm 数字时间，绝对不可误伤 2025-07-02 等 ISO 日期连字符)
+        val tightTimeRangeRegex = Pattern.compile("^(\\d{1,2}:\\d{2}(?::\\d{2})?)-(\\d{1,2}:\\d{2}(?::\\d{2})?)$")
+        val matcher = tightTimeRangeRegex.matcher(trimmed)
+        if (matcher.find()) {
+            return Pair(matcher.group(1)!!.trim(), matcher.group(2)!!.trim())
+        }
+
         return Pair(trimmed, null)
     }
 

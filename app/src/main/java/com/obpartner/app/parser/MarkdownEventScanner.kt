@@ -4,10 +4,11 @@ import com.obpartner.app.calendar.CalendarUtils
 import com.obpartner.app.model.AppSettings
 import com.obpartner.app.model.CalendarEvent
 import java.util.Date
+import java.util.regex.Pattern
 
 /**
- * 日程事件提取器 (与 Freepace CalendarBlock 完全对齐)
- * Calendar Event Scanner (Faithfully aligned with Freepace CalendarBlock)
+ * 日程事件提取器 (与 Freepace CalendarBlock 完全对齐，支持中英属性与日记正文日程)
+ * Calendar Event Scanner (Faithfully aligned with Freepace CalendarBlock, supports Chinese keys & body schedules)
  */
 object MarkdownEventScanner {
 
@@ -26,10 +27,16 @@ object MarkdownEventScanner {
 
         val baseDate = dateContextStr?.let { CalendarUtils.parseDate(it) }
 
-        // 2. 提取开始时间原始值
+        // 2. 提取开始时间原始值 (兼容 Freepace 用户常用中英文属性)
         val startRaw = frontmatter[settings.startTimeProp]
             ?: frontmatter["start_time"]
             ?: frontmatter["startTime"]
+            ?: frontmatter["课程开始时间"]
+            ?: frontmatter["开始时间"]
+            ?: frontmatter["上课时间"]
+            ?: frontmatter["日程时间"]
+            ?: frontmatter["会议时间"]
+            ?: frontmatter["开始"]
             ?: frontmatter["start"]
             ?: frontmatter["time"]
             ?: frontmatter["event_date"]
@@ -40,16 +47,20 @@ object MarkdownEventScanner {
         var rangeEndStr: String? = null
 
         if (startRaw != null) {
-            val (startPart, endPart) = CalendarUtils.splitTimeRange(startRaw.toString())
-            rangeEndStr = endPart
+            if (startRaw is Date) {
+                startDate = startRaw
+            } else {
+                val (startPart, endPart) = CalendarUtils.splitTimeRange(startRaw.toString())
+                rangeEndStr = endPart
 
-            // 尝试直接解析完整日期时间 (如 2026-05-01T20:45:00)
-            startDate = CalendarUtils.parseDate(startPart)
+                // 尝试直接解析完整日期时间 (如 2026-05-01T20:45:00)
+                startDate = CalendarUtils.parseDate(startPart)
 
-            // 若直接解析失败，说明可能是纯时间 (如 "20:45" 或 "20:45:00")，与基准日期组合
-            if (startDate == null) {
-                val refDate = baseDate ?: Date()
-                startDate = CalendarUtils.combineDateAndTime(refDate, startPart)
+                // 若直接解析失败，说明可能是纯时间 (如 "20:45" 或 "20:45:00")，与基准日期组合
+                if (startDate == null) {
+                    val refDate = baseDate ?: Date()
+                    startDate = CalendarUtils.combineDateAndTime(refDate, startPart)
+                }
             }
         } else if (baseDate != null && isLikelyEvent(frontmatter)) {
             // 没有显式 start_time，但有 date 且声明了 type: Event，视作全天事件
@@ -70,12 +81,22 @@ object MarkdownEventScanner {
             val endRaw = frontmatter[settings.endTimeProp]
                 ?: frontmatter["end_time"]
                 ?: frontmatter["endTime"]
+                ?: frontmatter["课程结束时间"]
+                ?: frontmatter["结束时间"]
+                ?: frontmatter["下课时间"]
+                ?: frontmatter["结束"]
                 ?: frontmatter["end"]
+                ?: frontmatter["event_end"]
                 ?: frontmatter["end_date"]
+                ?: frontmatter["due_date"]
 
             if (endRaw != null) {
-                endDate = CalendarUtils.parseDate(endRaw)
-                    ?: CalendarUtils.combineDateAndTime(startDate, endRaw.toString())
+                if (endRaw is Date) {
+                    endDate = endRaw
+                } else {
+                    endDate = CalendarUtils.parseDate(endRaw)
+                        ?: CalendarUtils.combineDateAndTime(startDate, endRaw.toString())
+                }
             }
         }
 
@@ -125,6 +146,7 @@ object MarkdownEventScanner {
             frontmatter[settings.colorGroupProp].toString()
         } else {
             frontmatter["student"]?.toString()?.takeIf { it.isNotBlank() }
+                ?: frontmatter["学生姓名"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: frontmatter["category"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: frontmatter["type"]?.toString()?.takeIf { it.isNotBlank() }
                 ?: "default"
@@ -149,9 +171,130 @@ object MarkdownEventScanner {
         )
     }
 
+    /**
+     * 从 Markdown 正文（如日记中的 ## 日程安排 或带时间段的任务列表）提取日程事件
+     * Extract calendar events from Markdown body text (e.g. ## 日程安排 or list items with times)
+     */
+    fun parseBodyEvents(
+        filePath: String,
+        fileName: String,
+        bodyContent: String,
+        frontmatter: Map<String, Any>,
+        settings: AppSettings
+    ): List<CalendarEvent> {
+        if (bodyContent.isBlank()) return emptyList()
+
+        // 确定基准日期 (优先从 frontmatter.date，其次从文件名 2025-02-03.md 提取)
+        val dateContextStr = frontmatter["date"]?.toString()
+            ?: frontmatter["event_date"]?.toString()
+            ?: frontmatter["day"]?.toString()
+            ?: CalendarUtils.extractDateFromText(fileName)
+
+        val baseDate = dateContextStr?.let { CalendarUtils.parseDate(it) } ?: Date()
+
+        val results = mutableListOf<CalendarEvent>()
+        val lines = bodyContent.lines()
+
+        var insideScheduleSection = false
+        var lineIndex = 0
+
+        // 正则 1: 时间段 "8:30-10:30 林小琰", "- [ ] 8:30-10:30 林小琰", "- 13:30~15:30 徐曌宇"
+        val timeRangeRegex = Pattern.compile("^\\s*(?:[-*+]\\s*(?:\\[[ xX]?\\]\\s*)?|\\d+\\.\\s*)?(\\d{1,2}:\\d{2})\\s*(?:-|~|–|—|至|to)\\s*(\\d{1,2}:\\d{2})\\s*(.*)$")
+        // 正则 2: 单个时间点 "- [ ] 14:00 开会", "09:30 晨会"
+        val singleTimeRegex = Pattern.compile("^\\s*(?:[-*+]\\s*(?:\\[[ xX]?\\]\\s*)?|\\d+\\.\\s*)?(\\d{1,2}:\\d{2})\\s+(.+)$")
+
+        for (rawLine in lines) {
+            lineIndex++
+            val line = rawLine.trim()
+            if (line.isBlank()) continue
+
+            // 检查是否进入/离开指定标题区域 (如 ## 日程安排, ## 今日日程, ## 预定日程)
+            if (line.startsWith("#")) {
+                val headerTitle = line.replace("#", "").trim()
+                insideScheduleSection = headerTitle.contains("日程") ||
+                        headerTitle.contains("时间表") ||
+                        headerTitle.contains("课表") ||
+                        headerTitle.contains("安排") ||
+                        headerTitle.contains("Schedule") ||
+                        headerTitle.contains("Event")
+                continue
+            }
+
+            // 尝试匹配时间段
+            val rangeMatcher = timeRangeRegex.matcher(line)
+            if (rangeMatcher.find()) {
+                val startStr = rangeMatcher.group(1) ?: continue
+                val endStr = rangeMatcher.group(2) ?: continue
+                val desc = rangeMatcher.group(3)?.trim() ?: ""
+
+                val start = CalendarUtils.combineDateAndTime(baseDate, startStr) ?: continue
+                val end = CalendarUtils.combineDateAndTime(baseDate, endStr) ?: Date(start.time + 3600000L)
+
+                val cleanTitle = desc.replace(Regex("^[-*+\\s]+"), "").ifBlank {
+                    fileName.removeSuffix(".md").removeSuffix(".markdown")
+                }
+
+                results.add(
+                    CalendarEvent(
+                        id = "$filePath#line_$lineIndex",
+                        title = cleanTitle,
+                        path = filePath,
+                        start = start.time,
+                        end = end.time,
+                        isAllDay = false,
+                        isCrossDay = false,
+                        colorValue = cleanTitle,
+                        displayText = cleanTitle,
+                        extraData = mapOf(
+                            "file.name" to fileName.removeSuffix(".md").removeSuffix(".markdown"),
+                            "source" to "body_schedule"
+                        )
+                    )
+                )
+                continue
+            }
+
+            // 若处于日程段落内，支持单时间点 (如 14:00 拜访客户)
+            if (insideScheduleSection) {
+                val singleMatcher = singleTimeRegex.matcher(line)
+                if (singleMatcher.find()) {
+                    val startStr = singleMatcher.group(1) ?: continue
+                    val desc = singleMatcher.group(2)?.trim() ?: ""
+
+                    val start = CalendarUtils.combineDateAndTime(baseDate, startStr) ?: continue
+                    val end = Date(start.time + 3600000L) // 默认持续 1 小时
+
+                    val cleanTitle = desc.replace(Regex("^[-*+\\s]+"), "").ifBlank {
+                        fileName.removeSuffix(".md").removeSuffix(".markdown")
+                    }
+
+                    results.add(
+                        CalendarEvent(
+                            id = "$filePath#line_$lineIndex",
+                            title = cleanTitle,
+                            path = filePath,
+                            start = start.time,
+                            end = end.time,
+                            isAllDay = false,
+                            isCrossDay = false,
+                            colorValue = cleanTitle,
+                            displayText = cleanTitle,
+                            extraData = mapOf(
+                                "file.name" to fileName.removeSuffix(".md").removeSuffix(".markdown"),
+                                "source" to "body_schedule"
+                            )
+                        )
+                    )
+                }
+            }
+        }
+
+        return results
+    }
+
     private fun isLikelyEvent(frontmatter: Map<String, Any>): Boolean {
         val type = frontmatter["type"]?.toString()
-        if (type.equals("Event", ignoreCase = true) || type.equals("日程", ignoreCase = true)) {
+        if (type.equals("Event", ignoreCase = true) || type.equals("日程", ignoreCase = true) || type.equals("预定课程", ignoreCase = true)) {
             return true
         }
         val tags = frontmatter["tags"]?.toString() ?: ""

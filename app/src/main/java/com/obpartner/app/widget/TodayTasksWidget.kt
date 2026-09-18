@@ -437,8 +437,6 @@ class ToggleTaskActionCallback : ActionCallback {
             MarkdownWriter.updateTaskStatus(file, "Done")
             TodayTasksWidget3x2().update(context, glanceId)
             TodayTasksWidget2x2().update(context, glanceId)
-            TodayTasksWidget4x2().update(context, glanceId)
-            TodayTasksWidget().update(context, glanceId)
         }
     }
 }

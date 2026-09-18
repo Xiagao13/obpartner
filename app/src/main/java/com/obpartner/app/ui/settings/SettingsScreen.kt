@@ -353,11 +353,8 @@ fun SettingsScreen(
                         CalendarWidget3x2().updateAll(context)
                         CalendarWidget2x3().updateAll(context)
                         CalendarWidget2x2().updateAll(context)
-                        CalendarWidget4x2().updateAll(context)
-                        CalendarWidget4x4().updateAll(context)
                         TodayTasksWidget3x2().updateAll(context)
                         TodayTasksWidget2x2().updateAll(context)
-                        TodayTasksWidget4x2().updateAll(context)
                     } catch (_: Exception) {
                     }
                 }

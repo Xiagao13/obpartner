@@ -1,15 +1,15 @@
 <resources>
     <string name="app_name">OBpartner</string>
-    <string name="widget_calendar_title">OBpartner 日历 (3×2 默认)</string>
-    <string name="widget_calendar_3x2_title">OBpartner 日历 (3×2 横版主推)</string>
-    <string name="widget_calendar_2x3_title">OBpartner 日历 (2×3 竖版主推)</string>
-    <string name="widget_calendar_2x2_title">OBpartner 日历 (2×2 方块精简)</string>
-    <string name="widget_calendar_4x2_title">OBpartner 日历 (4×2 宽屏兼容)</string>
-    <string name="widget_calendar_4x4_title">OBpartner 日历 (4×4 大卡片看板)</string>
-    <string name="widget_today_tasks_title">OBpartner 今日待办 (3×2 默认)</string>
-    <string name="widget_today_tasks_3x2_title">OBpartner 待办 (3×2 横版主推)</string>
-    <string name="widget_today_tasks_2x2_title">OBpartner 待办 (2×2 方块精简)</string>
-    <string name="widget_today_tasks_4x2_title">OBpartner 待办 (4×2 宽屏兼容)</string>
+    <string name="widget_calendar_3x2_title">3×2 日历 (横版)</string>
+    <string name="widget_calendar_3x2_desc">3列×2行 横版居中，左侧大日期农历，右侧今日日程</string>
+    <string name="widget_calendar_2x3_title">2×3 日历 (竖版)</string>
+    <string name="widget_calendar_2x3_desc">2列×3行 竖版对齐，顶部星期指示条，纵向日程流</string>
+    <string name="widget_calendar_2x2_title">2×2 日历 (方块)</string>
+    <string name="widget_calendar_2x2_desc">2列×2行 经典精简方块，今日紧急日程看板</string>
+    <string name="widget_today_tasks_3x2_title">3×2 待办 (横版)</string>
+    <string name="widget_today_tasks_3x2_desc">3列×2行 待办进度列表，一键勾选完成</string>
+    <string name="widget_today_tasks_2x2_title">2×2 待办 (方块)</string>
+    <string name="widget_today_tasks_2x2_desc">2列×2行 今日待办打卡方块</string>
 
 
     <string name="tab_calendar">日历</string>
